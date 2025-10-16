@@ -1,67 +1,146 @@
 # Copilot 使用说明：拼图棋盘游戏项目
 
+> **📖 完整文档**: 查看 `docs/PROJECT_DOCUMENTATION.md` 获取详细的项目信息
+
 ## 项目概述
 
 该项目分为**两个阶段的游戏开发**：
 
-1. **简单拼图游戏**（已完成）
-   位于 `src/components/PuzzleBoard.vue`，4×4 拖拽拼图。
-2. **拼图棋盘游戏（Puzzle Chess）**（已完成 MVP 1.0 ✅）
-   一个具有拼接匹配机制的战略 4×4 棋盘游戏。
+1. **简单拼图游戏**（已完成 ✅）
+   - 位于 `src/components/PuzzleBoard.vue`
+   - 4×4 拖拽拼图游戏
+   
+2. **拼图棋盘游戏（Puzzle Chess）**（v1.0 已完成 ✅）
+   - 4×4 双人回合制策略游戏
+   - 一回合一动作机制（移动或旋转）
+   - 核心类完成：GameEngine, MoveValidator, Board, PieceManager
+   - UI 完成：ChessBoard.vue（带移动提示、规则面板）
+   - 已设为首页，可直接访问
 
-**当前状态**：
-- Phase 1（简单拼图）：已完成 ✅
-- Phase 2（棋盘游戏）：MVP 1.0 基础可玩版本已完成 ✅
-  - 核心类完成：EdgeMatcher, MoveValidator, Board, GameEngine
-  - UI 完成：ChessBoard.vue（带移动提示功能）
-  - 已设为首页，可直接访问
-
----
-
-## 架构核心区别
-
-### 阶段一：简单拼图（已实现）
-
-* **位置**：`src/types/puzzle.ts`、`src/classes/Puzzle*.ts`、`src/components/PuzzleBoard.vue`
-* **功能**：4×4 拖拽拼图游戏，胜利条件为第一行拼对（1~4 顺序）
-* **关键类**：`PuzzleBoard`, `PuzzleGame`
-* **数据结构**：简单的 `PuzzlePiece`（包含 `id`、`currentPosition`、`isPlaced`）
-
-### 阶段二：拼图棋盘（已实现 ✅）
-
-* **实现位置**：
-  - 类型：`src/types/chess/index.ts`
-  - 核心类：`src/classes/chess/`（EdgeMatcher, MoveValidator, Board, GameEngine, PieceManager）
-  - 常量：`src/constants/chess/`（pieces.ts, board.ts）
-  - UI 组件：`src/components/chess/ChessBoard.vue`
-  - 视图：`src/views/ChessView.vue`（已设为首页）
-* **功能**：4×4 棋盘策略游戏，带有**边缘匹配机制**
-* **核心机制**：4 种边缘类型（`1+`、`1-`、`1\`+`、`1\`-`）必须正确配对
-
-⚠️ **切勿将两种游戏逻辑混用！**
+**当前版本**: v1.0（简化版本）- 2025-10-17  
+**状态**: MVP 完成，可玩测试版
 
 ---
 
-## 边缘匹配系统（Phase 2 - 已实现）
+## 🎮 游戏规则（v1.0）
 
-棋盘游戏的核心是**边缘兼容性**：
+### 核心机制
+
+- **回合制**: 玩家轮流行动
+- **一回合一动作**: 每回合只能执行一个动作（移动或旋转）
+- **自动切换**: 完成动作后自动切换到对方回合
+
+### 移动规则
+
+- ✅ **无距离限制**: 可移动到棋盘任意空位置
+- ✅ **8 个方向**: 直线（上/下/左/右）+ 对角线（4个）
+- ✅ **不可重叠**: 目标格子必须为空
+- ✅ **必须直线或对角线**: 使用切比雪夫距离计算
+
+### 旋转规则
+
+- **相邻移动（距离 = 1）**: 移动到相邻 8 格后，可选择是否旋转
+- **远距离移动（距离 > 1）**: 不能旋转，只能移动
+- **鸟类特权**: 资源 4 棋子可原地旋转（不移动）
+- **旋转角度**: 90° 增量（0°、90°、180°、270°）
+
+### 胜利条件
+
+- **玩家 1**: 将所有棋子移至第 3 行（底部）
+- **玩家 2**: 将所有棋子移至第 0 行（顶部）
+
+---
+
+## 架构核心
+
+### OOP 设计模式
+
+项目使用 **面向对象编程（OOP）** 管理游戏状态，**不使用 Pinia**：
 
 ```typescript
-// 边缘类型（参考 docs/DESIGN_DOCUMENT.md 第1.1节）
-type EdgeType = '1+' | '1-' | '1`+' | '1`-'
+// 游戏引擎 - 管理游戏状态
+class GameEngine {
+  private gameState: GameState
+  
+  initializeGameState(): GameState
+  executeMove(piece, toPosition, rotation?): boolean  // 移动后自动切换回合
+  rotatePiece(piece): boolean  // 仅鸟类原地旋转
+  switchTurn(): void
+  checkWinCondition(): void
+}
 
-// 匹配规则
-'1+'  ←→ '1-'   ✓（凸配凹）
-'1`+' ←→ '1`-'  ✓（反凸配反凹）
-'1+'  ←→ '1`-'  ✗（类型不同不匹配）
+// 移动验证器 - 验证移动合法性
+class MoveValidator {
+  static validateMove(piece, toPosition, board, rotation?): MoveValidation
+  static getPossibleMoves(piece, board): Move[]
+  static calculateChebyshevDistance(from, to): number
+}
 ```
 
-**4 种棋子形状**（来自 `/SVG/资源 X.svg`）：
+### 核心类型（v1.0）
 
-* 棋子 1：`top:'1-'`, `right:'1\`-'`, `bottom:'1\`-'`, `left:'1-'`
-* 棋子 2：`top:'1+'`, `right:'1-'`, `bottom:'1\`-'`, `left:'1\`+'`
-* 棋子 3：`top:'1\`+'`, `right:'1-'`, `bottom:'1\`-'`, `left:'1+'`
-* 棋子 4：`top:'1\`+'`, `right:'1+'`, `bottom:'1\`+'`, `left:'1+'`
+```typescript
+// 游戏状态（简化版本）
+interface GameState {
+  currentPlayer: Player          // 当前玩家（1 或 2）
+  board: BoardCell[][]          // 4×4 棋盘
+  player1Pieces: ChessPiece[]   // 玩家 1 的棋子
+  player2Pieces: ChessPiece[]   // 玩家 2 的棋子
+  moveHistory: Move[]           // 移动历史
+  winner: Player | null         // 获胜者
+  turnNumber: number            // 回合数
+  // ❌ 已移除: actionPoints, maxActionPoints, hasRotatedThisTurn
+}
+
+// 棋子
+interface ChessPiece {
+  id: number
+  shapeId: number        // 1-4（对应 SVG 资源）
+  player: Player
+  position: Position | null
+  rotation: Rotation     // 0 | 90 | 180 | 270
+  isOnBoard: boolean
+  isBird: boolean        // 资源 4 = 鸟类（可原地旋转）
+}
+```
+
+---
+
+## 文件结构
+
+```
+src/
+├── types/
+│   ├── puzzle.ts              # 简单拼图类型（Phase 1）
+│   └── chess/                 # 棋盘游戏类型（Phase 2）✅
+│       └── index.ts
+├── classes/
+│   ├── Puzzle*.ts             # 简单拼图逻辑
+│   └── chess/                 # 棋盘游戏核心类 ✅
+│       ├── EdgeMatcher.ts     # 边缘匹配（暂未启用）
+│       ├── MoveValidator.ts   # 移动验证（已添加中文注释）
+│       ├── Board.ts           # 棋盘管理
+│       ├── GameEngine.ts      # 游戏引擎（v1.0 简化版）
+│       ├── PieceManager.ts    # 棋子管理
+│       └── __tests__/         # 单元测试
+├── constants/
+│   └── chess/                 # 棋盘配置 ✅
+│       ├── pieces.ts          # 棋子定义
+│       └── board.ts           # BOARD_SIZE = 4
+├── components/
+│   ├── PuzzleBoard.vue        # 简单拼图
+│   └── chess/                 # 棋盘游戏 UI ✅
+│       └── ChessBoard.vue     # 主组件（含规则面板）
+├── views/
+│   └── ChessView.vue          # 棋盘游戏视图（首页）✅
+└── router/
+    └── index.ts               # 路由配置 ✅
+
+docs/
+├── PROJECT_DOCUMENTATION.md   ⭐ 完整项目文档（新）
+├── TODO.md                    📝 待办事项清单
+└── DOCUMENTATION_MERGE.md     📋 文档合并说明
+```
 
 ---
 
@@ -70,180 +149,242 @@ type EdgeType = '1+' | '1-' | '1`+' | '1`-'
 ### 运行项目
 
 ```bash
-pnpm dev          # 启动开发服务器 (首页为棋盘游戏)
-pnpm test:unit    # 运行 Vitest 单元测试
+pnpm install      # 安装依赖
+pnpm dev          # 启动开发服务器（首页为棋盘游戏）
 pnpm build        # 类型检查并构建
+pnpm test:unit    # 运行 Vitest 单元测试
 ```
 
-### 当前文件结构
+### 代码规范
 
-```
-src/
-├── types/
-│   ├── puzzle.ts      # 简单拼图类型
-│   └── chess/         # 棋盘游戏类型 ✅
-│       └── index.ts
-├── classes/
-│   ├── Puzzle*.ts     # 简单拼图逻辑
-│   └── chess/         # 棋盘游戏核心类 ✅
-│       ├── EdgeMatcher.ts
-│       ├── MoveValidator.ts
-│       ├── Board.ts
-│       ├── GameEngine.ts
-│       ├── PieceManager.ts
-│       └── __tests__/
-├── constants/
-│   └── chess/         # 棋盘配置 ✅
-│       ├── pieces.ts
-│       └── board.ts
-├── components/
-│   ├── PuzzleBoard.vue       # 简单拼图
-│   └── chess/                # 棋盘游戏 UI ✅
-│       └── ChessBoard.vue
-├── views/
-│   └── ChessView.vue         # 棋盘游戏视图（首页）✅
-└── router/
-    └── index.ts              # 路由配置（首页=棋盘）✅
-```
+1. **TypeScript 类型**:
+   ```typescript
+   // ✅ 使用 type-only 导入
+   import type { ChessPiece, GameState } from '@/types/chess'
+   
+   // ✅ 所有函数都要有类型注解
+   function executeMove(piece: ChessPiece, to: Position): boolean { }
+   
+   // ❌ 避免使用 any
+   ```
+
+2. **命名约定**:
+   - 类名: `PascalCase`（如 `GameEngine`）
+   - 方法/变量: `camelCase`（如 `executeMove`）
+   - 常量: `UPPER_SNAKE_CASE`（如 `BOARD_SIZE`）
+
+3. **注释**:
+   - 类和公共方法使用 JSDoc 注释
+   - 关键逻辑添加中文注释
+   - 复杂算法添加示例
 
 ---
 
-## 最新实现特性（2025-10-16）
+## 重要特性和限制
 
-### ✅ MVP 1.0 完成功能
+### ✅ 当前版本特性（v1.0）
 
-1. **核心游戏引擎**：
-   - EdgeMatcher：边缘匹配验证
-   - MoveValidator：移动合法性验证（8方向 + 切比雪夫距离）
-   - Board：4×4 棋盘管理
-   - GameEngine：完整游戏状态管理
-   - PieceManager：棋子初始化和管理
+1. **一回合一动作**: 简洁易懂的回合机制
+2. **无距离限制**: 可快速移动到棋盘任意位置
+3. **智能旋转**: 相邻移动可旋转，远距离不可旋转
+4. **鸟类特权**: 资源 4 棋子可原地旋转
+5. **移动提示**: 选中棋子后绿色圆圈显示可移动位置
+6. **玩家指示器**: 顶部/底部显示当前回合玩家
+7. **完整规则面板**: UI 右侧显示详细游戏规则
 
-2. **UI 组件**（ChessBoard.vue）：
-   - 红色背景 4×4 棋盘，白色网格线
-   - 棋子选择与移动（点击交互）
-   - 旋转功能（R 键或按钮）
-   - **移动提示**：选中棋子后绿色圆圈高亮可移动位置 🎯
-   - 游戏状态显示：当前玩家、回合数、胜利信息
-   - 控制按钮：撤销、重置、Pass
-   - 规则面板：完整的游戏规则说明（5大模块）
+### ❌ 已移除的功能
 
-3. **路由设置**：
-   - ChessView 已设为首页（`/`）
-   - 删除旧的 HomeView、AboutView
-   - 精简为单页应用
+1. **行动力系统**（v0.5 已废弃）:
+   - ❌ 每回合 3 点行动力
+   - ❌ 移动消耗 1 点行动力
+   - ❌ 每回合限旋转 1 次
 
-### 🎮 游戏机制
+2. **棋子重叠**（v0.4 已废弃）:
+   - ❌ 允许棋子堆叠
+   - ❌ 只能移动最顶层棋子
 
-- **棋盘尺寸**：4×4（已从 8×8 重构）
-- **起始区域**：Player1 第0行，Player2 第3行
-- **结束区域**：Player1 第3行，Player2 第0行
-- **胜利条件**：将所有棋子移至对侧结束区域
-- **边缘匹配**：移动后的棋子必须与相邻棋子边缘匹配
-- **移动规则**：8方向移动，最多3步距离，不可重叠
+3. **距离限制**（早期版本）:
+   - ❌ 1-3 步距离限制
+   - ✅ 现在无距离限制
+
+### 🔧 暂未启用的功能
+
+- **边缘匹配**: EdgeMatcher 类已实现，但当前为自由模式
+  - 边缘类型: `'1+'`, `'1-'`, `'1\`+'`, `'1\`-'`
+  - 匹配规则: `'1+' ←→ '1-'`, `'1\`+' ←→ '1\`-'`
+  - 未来版本可能作为高级模式启用
 
 ---
 
-## TypeScript 模式说明
+## 关键 API
 
-### 面向对象的游戏逻辑
-
-项目使用 **OOP 类结构** 管理游戏状态（核心逻辑不使用 Pinia）：
+### GameEngine
 
 ```typescript
-// 示例：PuzzleBoard.ts
-export class PuzzleBoard {
-  private board: BoardCell[]
+// 初始化游戏
+const engine = new GameEngine()
+const state = engine.initializeGameState()
 
-  constructor(size: number = 4) {
-    this.initBoard()
-  }
+// 执行移动（移动后自动切换回合）
+const piece = state.player1Pieces[0]
+engine.executeMove(piece, { row: 1, col: 0 })
 
-  // 公共方法
-  placePiece(pieceId: number, position: number): boolean { }
+// 相邻移动时可旋转
+engine.executeMove(piece, { row: 1, col: 1 }, 90)
 
-  // 私有辅助方法
-  private checkWinCondition(): void { }
-}
+// 鸟类原地旋转
+const birdPiece = state.player1Pieces[3]  // 资源 4
+engine.rotatePiece(birdPiece)
+
+// 悔棋
+engine.undoMove()
 ```
 
-### 类型导入约定
-
-统一使用 type-only 导入接口：
+### MoveValidator
 
 ```typescript
-import type { PuzzlePiece, BoardCell } from '@/types/puzzle'
+// 验证移动
+const validation = MoveValidator.validateMove(
+  piece,
+  { row: 2, col: 2 },
+  state.board,
+  90  // 可选旋转角度
+)
+
+// 获取所有可能的移动（用于 UI 提示）
+const possibleMoves = MoveValidator.getPossibleMoves(piece, state.board)
+
+// 计算切比雪夫距离
+const distance = MoveValidator.calculateChebyshevDistance(
+  { row: 0, col: 0 },
+  { row: 2, col: 1 }
+) // 返回 2
 ```
-
----
-
-## 测试策略（来自设计文档）
-
-### 棋盘游戏关键测试用例
-
-1. **EdgeMatcher**：测试 16 种边缘组合（4×4 矩阵）
-2. **旋转逻辑**：验证 0°/90°/180°/270° 旋转后的边缘值
-3. **移动验证**：8 个方向 × 3 移动距离 × 多种旋转场景
-
-示例（来自 `docs/QUICK_DEV_GUIDE.md`）：
-
-```typescript
-describe('EdgeMatcher', () => {
-  it('应正确匹配凸与凹', () => {
-    expect(EdgeMatcher.canMatch('1+', '1-')).toBe(true)
-  })
-})
-```
-
----
-
-## 文档导航
-
-文档重新检索
 
 ---
 
 ## 常见错误避免
 
-1. ❌ 不要在 `src/types/puzzle.ts` 中添加棋盘逻辑
-2. ✅ 棋子 SVG 位于 `/SVG/资源 X.svg`（资源 1.svg ~ 资源 4.svg）
-3. ⚙️ 棋盘尺寸：
-   - 简单拼图：4×4
-   - 棋盘游戏：4×4（已从 8×8 重构）
-4. 🧩 胜利条件不同：
-   - 简单拼图：检查顶行顺序
-   - 棋盘游戏：所有棋子抵达对侧
-5. 📖 项目使用中文，包含文档和注释
-6. 🎯 移动提示：使用 `GameEngine.getPossibleMovesForPiece(piece)` 获取合法移动
-7. 🔄 不要自动提交 Git，由用户手动控制
+1. ❌ **不要混用两个游戏的逻辑**:
+   - 简单拼图: `src/types/puzzle.ts`, `PuzzleBoard.vue`
+   - 棋盘游戏: `src/types/chess/`, `ChessBoard.vue`
+
+2. ❌ **不要添加已废弃的功能**:
+   - 不要添加行动力系统（actionPoints）
+   - 不要允许棋子重叠
+   - 不要限制移动距离为 1-3 步
+
+3. ✅ **正确的数据位置**:
+   - 棋子 SVG: `/SVG/资源 X.svg`（1-4）
+   - 棋盘大小: 4×4（不是 8×8）
+   - 玩家 1 起始: 第 0 行（顶部）
+   - 玩家 2 起始: 第 3 行（底部）
+
+4. ✅ **移动提示实现**:
+   ```typescript
+   // 使用 GameEngine 获取可能的移动
+   const possibleMoves = gameEngine.getPossibleMovesForPiece(selectedPiece)
+   ```
+
+5. 🔄 **不要自动提交 Git**:
+   - 由用户手动控制版本提交
+   - 修改代码后更新 `docs/TODO.md`
 
 ---
 
-## MVP 实现进度
+## 测试策略
 
-### ✅ 已完成（MVP 1.0）
+### 单元测试
 
-1. **核心系统**：
-   - ✅ EdgeMatcher（边缘匹配）
-   - ✅ MoveValidator（移动验证）
-   - ✅ Board（棋盘管理）
-   - ✅ GameEngine（游戏引擎）
-   - ✅ PieceManager（棋子管理）
+```typescript
+// 测试边缘匹配（EdgeMatcher）
+describe('EdgeMatcher', () => {
+  it('应正确匹配凸与凹', () => {
+    expect(EdgeMatcher.canMatch('1+', '1-')).toBe(true)
+  })
+})
 
+// 测试移动验证（MoveValidator）
+describe('MoveValidator', () => {
+  it('应验证直线移动', () => {
+    const validation = MoveValidator.validateMove(piece, target, board)
+    expect(validation.valid).toBe(true)
+  })
+})
+```
 
-3. **测试**：
+### 功能测试
 
-这是游戏,无法单元测试,开发完毕后我会测试功能.
+由于游戏的交互性，主要通过**手动测试**：
 
+- [ ] 棋子选择（黄色高亮）
+- [ ] 移动提示（绿色圆圈）
+- [ ] 合法移动（8 方向）
+- [ ] 相邻移动旋转（R 键）
+- [ ] 远距离移动不可旋转
+- [ ] 鸟类原地旋转
+- [ ] 回合自动切换
+- [ ] 胜利条件检测
+
+---
+
+## 文档导航
+
+- **完整项目文档**: `docs/PROJECT_DOCUMENTATION.md` ⭐
+  - 项目概述、游戏规则、技术架构
+  - 代码结构、开发指南、API 文档
+  - 测试说明、版本历史、FAQ
+
+- **待办事项**: `docs/TODO.md`
+  - 当前进度、已完成任务
+  - 版本演化历史
+
+- **文档合并说明**: `docs/DOCUMENTATION_MERGE.md`
+  - 文档整合过程
+  - 删除的过时信息
+
+---
+
+## 版本历史
+
+### v1.0 - 简化版本（当前）- 2025-10-17
+- ✅ 一回合一动作机制
+- ✅ 移除行动力系统
+- ✅ 无距离限制
+- ✅ 智能旋转规则
+- ✅ 不可重叠
+- ✅ 完整文档整合
+
+### v0.5 - 行动力系统（已废弃）
+- ❌ 每回合 3 点行动力
+- 原因：规则过于复杂
+
+### v0.4 - 自由移动模式（已废弃）
+- ❌ 允许棋子重叠
+- 原因：缺乏策略性
+
+---
+
+## 进度管理
+
+- **实时更新**: 修改代码后更新 `docs/TODO.md`
+- **问题追踪**: 遇到新问题创建待办事项
+- **版本控制**: 由用户手动提交 Git
+- **文档同步**: 重大变更后更新 `PROJECT_DOCUMENTATION.md`
+
+---
 
 ## 若遇不清楚部分
 
-* 查阅 `docs/DESIGN_DOCUMENT.md` 第 1~3 节（详细算法）
-* 查阅 `docs/ROADMAP.md` Day 1~5（立即可执行任务）
-* **边缘匹配机制** 是该项目的独特核心（详见设计文档第1.1节）
+1. **完整文档**: 查阅 `docs/PROJECT_DOCUMENTATION.md`
+2. **API 参考**: 查看完整文档的 "API 文档" 章节
+3. **游戏规则**: 查看完整文档的 "游戏规则" 章节
+4. **代码示例**: 查看完整文档的 "开发指南" 章节
+5. **FAQ**: 查看完整文档的 "附录 - 常见问题" 章节
 
-## 进度
+---
 
-实时的修改,docs/TODO.md.以便于查看当前的进度.
-如果在过程中遇到了新的问题但是暂时并不解决的也要创建新增的待办事项.
-不要提交git,必要的时候我手动提交
+**项目语言**: 中文（代码注释、文档、UI）  
+**技术栈**: Vue 3 + TypeScript + Vite  
+**设计模式**: OOP（面向对象编程）  
+**最后更新**: 2025-10-17
