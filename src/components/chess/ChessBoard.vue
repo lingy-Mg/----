@@ -67,10 +67,53 @@
 
     <!-- 规则面板 -->
     <div class="rules-panel">
-      <h3>游戏规则</h3>
+      <h3>🎮 游戏规则</h3>
       <div class="rules-content">
-        <p>规则说明将在此处显示...</p>
-        <p>（请手动添加规则文本）</p>
+        <section class="rule-section">
+          <h4>📋 基础规则</h4>
+          <ul>
+            <li><strong>棋盘</strong>：4×4 网格</li>
+            <li><strong>棋子</strong>：每方4个拼图形状棋子</li>
+            <li><strong>目标</strong>：将己方所有棋子移至对方起始行</li>
+            <li><strong>胜利</strong>：率先完成目标的玩家获胜</li>
+          </ul>
+        </section>
+
+        <section class="rule-section">
+          <h4>🧩 边缘匹配</h4>
+          <p>每个棋子有4条边，每条边有4种类型：</p>
+          <ul class="compact">
+            <li><code>1+</code> 凸出 ↔ <code>1-</code> 凹入 ✅</li>
+            <li><code>1`+</code> 反凸 ↔ <code>1`-</code> 反凹 ✅</li>
+            <li><code>1+</code> 和 <code>1`-</code> ❌ 不匹配</li>
+          </ul>
+          <p class="tip">💡 移动后，相邻边必须完美拼接！</p>
+        </section>
+
+        <section class="rule-section">
+          <h4>♟️ 移动规则</h4>
+          <ul>
+            <li><strong>方向</strong>：8向（直线+对角线）</li>
+            <li><strong>距离</strong>：每次1-3格</li>
+            <li><strong>旋转限制</strong>：需要旋转时只能移动1格</li>
+            <li><strong>堆叠</strong>：允许多个棋子在同一格</li>
+          </ul>
+        </section>
+
+        <section class="rule-section">
+          <h4>🎯 操作指南</h4>
+          <ol>
+            <li>点击己方棋子选中（黄色高亮）</li>
+            <li>点击目标格子移动棋子</li>
+            <li>使用"跳过"按钮跳过本回合</li>
+            <li>使用"悔棋"撤销上一步</li>
+          </ol>
+        </section>
+
+        <section class="rule-section tip-box">
+          <p><strong>💭 策略提示</strong></p>
+          <p>合理利用棋子旋转和堆叠，阻挡对手的同时为自己开辟道路！</p>
+        </section>
       </div>
     </div>
   </div>
@@ -86,6 +129,7 @@ import type { Player, Position, ChessPiece, BoardCell, GameMode } from '@/types/
 // 游戏引擎实例
 const gameEngine = ref<GameEngine | null>(null)
 const selectedCell = ref<Position | null>(null)
+const possibleMoves = ref<Position[]>([])
 
 // 初始化游戏
 onMounted(() => {
@@ -135,6 +179,14 @@ function getCellClass(cell: BoardCell): string[] {
     classes.push('selected')
   }
   
+  // 检查是否为可移动位置
+  const isPossibleMove = possibleMoves.value.some(
+    pos => pos.row === cell.position.row && pos.col === cell.position.col
+  )
+  if (isPossibleMove) {
+    classes.push('possible-move')
+  }
+  
   if (cell.isStartZone.player1) {
     classes.push('start-zone-player1')
   }
@@ -172,6 +224,17 @@ function getPieceSvg(piece: ChessPiece): string {
   return shape.svgPath
 }
 
+// 计算可能的移动位置
+function calculatePossibleMoves(piece: ChessPiece): void {
+  if (!gameEngine.value) {
+    possibleMoves.value = []
+    return
+  }
+  
+  const moves = gameEngine.value.getPossibleMovesForPiece(piece)
+  possibleMoves.value = moves.map(move => move.to)
+}
+
 function handleCellClick(cell: BoardCell): void {
   if (winner.value || !gameEngine.value) return
 
@@ -182,6 +245,8 @@ function handleCellClick(cell: BoardCell): void {
     const topPiece = cell.pieces[cell.pieces.length - 1]
     if (topPiece && topPiece.player === currentPlayer.value) {
       selectedCell.value = pos
+      // 计算并显示可能的移动
+      calculatePossibleMoves(topPiece)
     }
     return
   }
@@ -191,6 +256,7 @@ function handleCellClick(cell: BoardCell): void {
     // 点击同一格子取消选中
     if (selectedCell.value.row === pos.row && selectedCell.value.col === pos.col) {
       selectedCell.value = null
+      possibleMoves.value = []
       return
     }
 
@@ -198,12 +264,14 @@ function handleCellClick(cell: BoardCell): void {
     const fromCell = gameEngine.value.getBoard().getCell(selectedCell.value)
     if (!fromCell || fromCell.pieces.length === 0) {
       selectedCell.value = null
+      possibleMoves.value = []
       return
     }
 
     const piece = fromCell.pieces[fromCell.pieces.length - 1]
     if (!piece) {
       selectedCell.value = null
+      possibleMoves.value = []
       return
     }
 
@@ -221,17 +289,21 @@ function handleCellClick(cell: BoardCell): void {
     const success = gameEngine.value.executeMove(move)
     if (success) {
       selectedCell.value = null
+      possibleMoves.value = []
     } else {
       // 移动失败，尝试选中新格子的棋子
       if (cell.pieces.length > 0) {
         const topPiece = cell.pieces[cell.pieces.length - 1]
         if (topPiece && topPiece.player === currentPlayer.value) {
           selectedCell.value = pos
+          calculatePossibleMoves(topPiece)
         } else {
           selectedCell.value = null
+          possibleMoves.value = []
         }
       } else {
         selectedCell.value = null
+        possibleMoves.value = []
       }
     }
   }
@@ -307,6 +379,33 @@ function handleReset(): void {
 .board-cell.selected {
   background-color: rgba(255, 235, 59, 0.5);
   border-color: #ffd700;
+}
+
+/* 可移动位置提示 */
+.board-cell.possible-move {
+  position: relative;
+}
+
+.board-cell.possible-move::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  background-color: rgba(76, 175, 80, 0.6);
+  border: 2px solid rgba(76, 175, 80, 0.9);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.board-cell.possible-move:hover::after {
+  background-color: rgba(76, 175, 80, 0.8);
+  border-color: rgba(76, 175, 80, 1);
+  width: 28px;
+  height: 28px;
 }
 
 .board-cell.start-zone-player1 {
@@ -470,27 +569,128 @@ function handleReset(): void {
 
 /* 规则面板 */
 .rules-panel {
-  width: 300px;
+  width: 320px;
   background: white;
   border-radius: 12px;
   padding: 1.5rem;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .rules-panel h3 {
   margin: 0 0 1rem 0;
   color: #333;
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   border-bottom: 2px solid #2196f3;
   padding-bottom: 0.5rem;
 }
 
 .rules-content {
-  color: #666;
-  line-height: 1.6;
+  color: #555;
+  line-height: 1.7;
+  font-size: 0.95rem;
 }
 
-.rules-content p {
+.rule-section {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.rule-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.rule-section h4 {
+  margin: 0 0 0.75rem 0;
+  color: #2196f3;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.rule-section ul {
   margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.rule-section ul.compact {
+  padding-left: 1.2rem;
+}
+
+.rule-section li {
+  margin: 0.4rem 0;
+  color: #666;
+}
+
+.rule-section ol {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+  counter-reset: item;
+}
+
+.rule-section ol li {
+  margin: 0.5rem 0;
+  color: #666;
+}
+
+.rule-section code {
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  color: #e91e63;
+  font-weight: 600;
+}
+
+.rule-section p {
+  margin: 0.5rem 0;
+  color: #666;
+}
+
+.rule-section p.tip {
+  background: #fff3cd;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border-left: 3px solid #ffc107;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.tip-box {
+  background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+  padding: 1rem;
+  border-radius: 8px;
+  border: none;
+}
+
+.tip-box p {
+  margin: 0.3rem 0;
+  color: #555;
+}
+
+.tip-box strong {
+  color: #2196f3;
+}
+
+/* 规则面板滚动条样式 */
+.rules-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.rules-panel::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.rules-panel::-webkit-scrollbar-thumb {
+  background: #2196f3;
+  border-radius: 10px;
+}
+
+.rules-panel::-webkit-scrollbar-thumb:hover {
+  background: #1976d2;
 }
 </style>
