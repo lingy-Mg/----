@@ -2,6 +2,20 @@
   <div class="chess-game-container">
     <!-- 游戏棋盘区域 -->
     <div class="game-board-section">
+      <!-- 上方玩家指示器 (玩家1在顶部) -->
+      <div class="board-player-indicator top" :class="{ active: currentPlayer === 1, 'has-winner': !!winner }">
+        <div class="player-badge">
+          <div class="player-icon player1">
+            <span class="player-number">1</span>
+          </div>
+          <div class="player-info">
+            <span class="player-label">玩家 1</span>
+            <span v-if="currentPlayer === 1 && !winner" class="turn-badge">当前回合</span>
+            <span v-if="winner === 1" class="winner-badge">🏆 获胜</span>
+          </div>
+        </div>
+      </div>
+
       <div class="chess-board-wrapper">
         <div class="chess-board" :style="boardStyle">
           <div
@@ -18,17 +32,36 @@
             >
               <!-- 渲染棋子 -->
               <div v-if="cell.pieces.length > 0" class="pieces-stack">
-                <img
+                <div
                   v-for="piece in cell.pieces"
                   :key="piece.id"
-                  :src="getPieceSvg(piece)"
-                  :alt="`Piece ${piece.shapeId}`"
-                  class="piece-svg"
-                  :class="getPieceClass(piece)"
-                  :style="getPieceStyle(piece)"
-                />
+                  class="piece-wrapper"
+                  :class="getPieceWrapperClass(piece)"
+                >
+                  <img
+                    :src="getPieceSvg(piece)"
+                    :alt="`Piece ${piece.shapeId}`"
+                    class="piece-svg"
+                    :class="getPieceClass(piece)"
+                    :style="getPieceStyle(piece)"
+                  />
+                </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 下方玩家指示器 (玩家2在底部) -->
+      <div class="board-player-indicator bottom" :class="{ active: currentPlayer === 2, 'has-winner': !!winner }">
+        <div class="player-badge">
+          <div class="player-icon player2">
+            <span class="player-number">2</span>
+          </div>
+          <div class="player-info">
+            <span class="player-label">玩家 2</span>
+            <span v-if="currentPlayer === 2 && !winner" class="turn-badge">当前回合</span>
+            <span v-if="winner === 2" class="winner-badge">🏆 获胜</span>
           </div>
         </div>
       </div>
@@ -79,54 +112,88 @@
 
     <!-- 规则面板 -->
     <div class="rules-panel">
-      <h3>🎮 游戏规则</h3>
-      <div class="rules-content">
-        <section class="rule-section">
-          <h4>📋 基础规则</h4>
+    <h3>🎮 游戏规则</h3>
+    <div class="rules-content">
+      <section class="rule-section">
+        <h4>📋 游戏目标</h4>
+        <ul>
+        <li><strong>棋盘</strong>：4×4 网格</li>
+        <li><strong>棋子</strong>：每方4个拼图形状棋子</li>
+        <li><strong>起始位置</strong>：玩家1在顶行（第0行）、玩家2在底行（第3行）</li>
+        <li><strong>目标</strong>：将己方所有棋子移至对方起始行</li>
+        <li><strong>胜利</strong>：率先将所有棋子移至对侧的玩家获胜</li>
+        </ul>
+      </section>
+
+      <section class="rule-section">
+        <h4>♟️ 移动规则</h4>
+        <ul>
+        <li><strong>回合制</strong>：每回合只能执行一个动作（移动或旋转）</li>
+        <li><strong>移动范围</strong>：可移动到棋盘上任意空位置（无距离限制）</li>
+        <li><strong>移动方向</strong>：直线（上/下/左/右）或对角线（8个方向）</li>
+        <li><strong>目标格子</strong>：必须为空，不可重叠</li>
+        <li><strong>自动切换</strong>：完成动作后自动切换到对方回合</li>
+        </ul>
+      </section>
+
+      <section class="rule-section">
+        <h4>🔄 旋转规则</h4>
+        <ul>
+        <li><strong>相邻移动（距离 = 1格）</strong>：
           <ul>
-            <li><strong>棋盘</strong>：4×4 网格</li>
-            <li><strong>棋子</strong>：每方4个拼图形状棋子</li>
-            <li><strong>目标</strong>：将己方所有棋子移至对方起始行</li>
-            <li><strong>胜利</strong>：率先完成目标的玩家获胜</li>
+            <li>✅ 移动到相邻8格之一后，可以选择是否旋转</li>
+            <li>⚠️ 旋转后本次移动结束，切换回合</li>
           </ul>
-        </section>
-
-        <section class="rule-section">
-          <h4>🧩 边缘匹配</h4>
-          <p>每个棋子有4条边，每条边有4种类型：</p>
-          <ul class="compact">
-            <li><code>1+</code> 凸出 ↔ <code>1-</code> 凹入 ✅</li>
-            <li><code>1`+</code> 反凸 ↔ <code>1`-</code> 反凹 ✅</li>
-            <li><code>1+</code> 和 <code>1`-</code> ❌ 不匹配</li>
-          </ul>
-          <p class="tip">💡 移动后，相邻边必须完美拼接！</p>
-        </section>
-
-        <section class="rule-section">
-          <h4>♟️ 移动规则</h4>
+        </li>
+        <li><strong>远距离移动（距离 > 1格）</strong>：
           <ul>
-            <li><strong>方向</strong>：8向（直线+对角线）</li>
-            <li><strong>距离</strong>：每次1-3格</li>
-            <li><strong>旋转限制</strong>：需要旋转时只能移动1格</li>
-            <li><strong>堆叠</strong>：允许多个棋子在同一格</li>
+            <li>❌ 不能旋转，只能移动</li>
+            <li>✅ 适合快速占领位置</li>
           </ul>
-        </section>
+        </li>
+        <li><strong>鸟类棋子特权</strong>：
+          <ul>
+            <li>🦅 可以原地旋转（不移动）</li>
+            <li>⚠️ 原地旋转也算一个动作，会结束回合</li>
+          </ul>
+        </li>
+        </ul>
+      </section>
 
-        <section class="rule-section">
-          <h4>🎯 操作指南</h4>
-          <ol>
-            <li>点击己方棋子选中（黄色高亮）</li>
-            <li>点击目标格子移动棋子</li>
-            <li>使用"跳过"按钮跳过本回合</li>
-            <li>使用"悔棋"撤销上一步</li>
-          </ol>
-        </section>
+      <section class="rule-section">
+        <h4>🧩 边缘匹配（暂不启用）</h4>
+        <p>当前版本为<strong>自由模式</strong>，无需考虑边缘匹配规则。</p>
+        <p class="tip">💡 棋子可以自由移动到任何空位置！</p>
+      </section>
 
-        <section class="rule-section tip-box">
-          <p><strong>💭 策略提示</strong></p>
-          <p>合理利用棋子旋转和堆叠，阻挡对手的同时为自己开辟道路！</p>
-        </section>
-      </div>
+      <section class="rule-section">
+        <h4>⚡ 策略要点</h4>
+        <ul>
+        <li><strong>每回合一个动作</strong>：选择移动或旋转（鸟类专属）</li>
+        <li><strong>快速推进</strong>：远距离移动可快速抵达目标区域</li>
+        <li><strong>精准调整</strong>：相邻移动可旋转，调整棋子朝向</li>
+        <li><strong>鸟类优势</strong>：可原地旋转，无需移动</li>
+        <li><strong>位置卡位</strong>：合理占据关键位置，阻碍对手</li>
+        </ul>
+      </section>
+
+      <section class="rule-section">
+        <h4>🎯 操作指南</h4>
+        <ol>
+        <li>点击己方棋子选中（黄色高亮 + 绿色可移动提示）</li>
+        <li>点击目标格子完成移动</li>
+        <li>相邻移动时可按 <kbd>R</kbd> 键旋转</li>
+        <li>鸟类棋子可原地按 <kbd>R</kbd> 键旋转</li>
+        <li>按 <kbd>ESC</kbd> 取消选择</li>
+        <li>点击"跳过"按钮可提前结束回合</li>
+        </ol>
+      </section>
+
+      <section class="rule-section tip-box">
+        <p><strong>💭 新手提示</strong></p>
+        <p>简洁的一回合一动作规则！远距离移动效率高，相邻移动可旋转。合理利用鸟类棋子的原地旋转能力，快速完成目标！</p>
+      </section>
+    </div>
     </div>
   </div>
 </template>
@@ -215,12 +282,26 @@ function getCellClass(cell: BoardCell): string[] {
   return classes
 }
 
+function getPieceWrapperClass(piece: ChessPiece): string[] {
+  const classes: string[] = []
+  classes.push(`player${piece.player}-wrapper`)
+  // 如果是当前玩家的棋子，添加高亮类
+  if (piece.player === currentPlayer.value) {
+    classes.push('current-player-wrapper')
+  }
+  return classes
+}
+
 function getPieceClass(piece: ChessPiece): string[] {
   const classes: string[] = []
   classes.push(`player${piece.player}`)
   classes.push(`rotation-${piece.rotation}`)
   if (piece.isBird) {
     classes.push('bird')
+  }
+  // 如果是当前玩家的棋子，添加高亮类
+  if (piece.player === currentPlayer.value) {
+    classes.push('current-player-piece')
   }
   return classes
 }
@@ -397,7 +478,164 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2rem;
+  gap: 1rem;
+}
+
+/* 棋盘玩家指示器 */
+.board-player-indicator {
+  width: 100%;
+  max-width: 400px;
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+  border-radius: 12px;
+  opacity: 0.5;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.board-player-indicator.active {
+  opacity: 1;
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.board-player-indicator.top.active {
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  border: 3px solid #f44336;
+}
+
+.board-player-indicator.bottom.active {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border: 3px solid #2196f3;
+}
+
+.board-player-indicator.has-winner {
+  opacity: 0.3;
+}
+
+.board-player-indicator.has-winner.active {
+  opacity: 1;
+  animation: winner-celebration 1s ease-in-out infinite;
+}
+
+.player-badge {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.player-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 2rem;
+  color: white;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s ease;
+}
+
+.board-player-indicator.active .player-icon {
+  transform: scale(1.1);
+  animation: bounce 1s ease-in-out infinite;
+}
+
+.player-icon.player1 {
+  background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+}
+
+.player-icon.player2 {
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+}
+
+.player-number {
+  font-family: 'Arial Black', sans-serif;
+}
+
+.player-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.player-label {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #333;
+}
+
+.turn-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+  color: white;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  animation: blink 1.5s ease-in-out infinite;
+}
+
+.winner-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  color: #333;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  animation: winner-shine 1s ease-in-out infinite;
+}
+
+/* 动画 */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  }
+  50% {
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3), 0 0 20px rgba(76, 175, 80, 0.5);
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: scale(1.1) translateY(0);
+  }
+  50% {
+    transform: scale(1.1) translateY(-5px);
+  }
+}
+
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes winner-celebration {
+  0%, 100% {
+    transform: scale(1.05);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes winner-shine {
+  0%, 100% {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+  50% {
+    box-shadow: 0 4px 8px rgba(255, 215, 0, 0.6), 0 0 15px rgba(255, 215, 0, 0.4);
+  }
 }
 
 .chess-board-wrapper {
@@ -486,20 +724,77 @@ onUnmounted(() => {
   justify-content: center;
 }
 
+/* 棋子外层包装 - 添加彩色背景圆 */
+.piece-wrapper {
+  width: 90%;
+  height: 90%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+/* 玩家1棋子背景 - 蓝色 */
+.piece-wrapper.player1-wrapper {
+  background: radial-gradient(circle, rgba(33, 150, 243, 0.15) 0%, rgba(33, 150, 243, 0.05) 70%, transparent 100%);
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.3) inset;
+}
+
+/* 玩家2棋子背景 - 红色 */
+.piece-wrapper.player2-wrapper {
+  background: radial-gradient(circle, rgba(244, 67, 54, 0.15) 0%, rgba(244, 67, 54, 0.05) 70%, transparent 100%);
+  box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.3) inset;
+}
+
+/* 当前玩家的棋子 - 更明显的边框（无动画） */
+.piece-wrapper.player1-wrapper.current-player-wrapper {
+  background: radial-gradient(circle, rgba(33, 150, 243, 0.25) 0%, rgba(33, 150, 243, 0.1) 70%, transparent 100%);
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.6) inset,
+              0 0 15px rgba(33, 150, 243, 0.4);
+}
+
+.piece-wrapper.player2-wrapper.current-player-wrapper {
+  background: radial-gradient(circle, rgba(244, 67, 54, 0.25) 0%, rgba(244, 67, 54, 0.1) 70%, transparent 100%);
+  box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.6) inset,
+              0 0 15px rgba(244, 67, 54, 0.4);
+}
+
 .piece-svg {
-  width: 80%;
-  height: 80%;
+  width: 75%;
+  height: 75%;
   object-fit: contain;
-  transition: transform 0.3s ease;
+  transition: all 0.3s ease;
   pointer-events: none;
+  position: relative;
 }
 
+/* 玩家1棋子 - 蓝色边框和阴影 */
 .piece-svg.player1 {
-  filter: drop-shadow(0 2px 4px rgba(33, 150, 243, 0.3));
+  filter: drop-shadow(0 0 8px rgba(33, 150, 243, 0.8)) 
+          drop-shadow(0 2px 4px rgba(33, 150, 243, 0.4));
+  border-radius: 8px;
 }
 
+/* 玩家2棋子 - 红色边框和阴影 */
 .piece-svg.player2 {
-  filter: drop-shadow(0 2px 4px rgba(244, 67, 54, 0.3));
+  filter: drop-shadow(0 0 8px rgba(244, 67, 54, 0.8)) 
+          drop-shadow(0 2px 4px rgba(244, 67, 54, 0.4));
+  border-radius: 8px;
+}
+
+/* 当前玩家的棋子 - 更强烈的高亮（无动画） */
+.piece-svg.player1.current-player-piece {
+  filter: drop-shadow(0 0 12px rgba(33, 150, 243, 1)) 
+          drop-shadow(0 0 20px rgba(33, 150, 243, 0.6))
+          drop-shadow(0 4px 8px rgba(33, 150, 243, 0.4));
+}
+
+.piece-svg.player2.current-player-piece {
+  filter: drop-shadow(0 0 12px rgba(244, 67, 54, 1)) 
+          drop-shadow(0 0 20px rgba(244, 67, 54, 0.6))
+          drop-shadow(0 4px 8px rgba(244, 67, 54, 0.4));
 }
 
 /* 游戏控制区 */
@@ -672,10 +967,11 @@ onUnmounted(() => {
 
 /* 规则面板 */
 .rules-panel {
-  width: 320px;
+  width: 420px;
+  min-width: 400px;
   background: white;
   border-radius: 12px;
-  padding: 1.5rem;
+  padding: 2rem;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   max-height: 90vh;
   overflow-y: auto;
@@ -691,13 +987,13 @@ onUnmounted(() => {
 
 .rules-content {
   color: #555;
-  line-height: 1.7;
-  font-size: 0.95rem;
+  line-height: 1.8;
+  font-size: 1rem;
 }
 
 .rule-section {
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
+  margin-bottom: 1.75rem;
+  padding-bottom: 1.25rem;
   border-bottom: 1px solid #f0f0f0;
 }
 
@@ -707,9 +1003,9 @@ onUnmounted(() => {
 }
 
 .rule-section h4 {
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 0.85rem 0;
   color: #2196f3;
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   font-weight: 600;
 }
 

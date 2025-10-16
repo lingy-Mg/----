@@ -1,6 +1,6 @@
 /**
- * MoveValidator - Movement Validation System
- * Validates piece movements and generates possible moves
+ * MoveValidator - 移动验证系统
+ * 验证棋子移动的合法性并生成可能的移动
  */
 
 import type {
@@ -17,49 +17,49 @@ import { MIN_MOVE_STEPS, MAX_MOVE_STEPS, ROTATE_MOVE_LIMIT } from '@/constants/c
 import { EdgeMatcher } from './EdgeMatcher'
 
 /**
- * MoveValidator class handles move validation and generation
+ * MoveValidator 类处理移动验证和生成
  */
 export class MoveValidator {
   /**
-   * Calculate Manhattan distance between two positions
+   * 计算曼哈顿距离（不含对角线）
    * 
-   * @param from Start position
-   * @param to End position
-   * @returns Distance in cells
+   * @param from 起始位置
+   * @param to 目标位置
+   * @returns 距离（格数）
    */
   static calculateDistance(from: Position, to: Position): number {
     return Math.abs(to.row - from.row) + Math.abs(to.col - from.col)
   }
 
   /**
-   * Calculate Chebyshev distance (allows diagonals)
-   * Maximum of horizontal and vertical distance
+   * 计算切比雪夫距离（含对角线）
+   * 水平和垂直距离的最大值
    * 
-   * @param from Start position
-   * @param to End position
-   * @returns Distance in cells (including diagonal)
+   * @param from 起始位置
+   * @param to 目标位置
+   * @returns 距离（格数，包含对角线）
    */
   static calculateChebyshevDistance(from: Position, to: Position): number {
     return Math.max(Math.abs(to.row - from.row), Math.abs(to.col - from.col))
   }
 
   /**
-   * Get direction from one position to another
-   * Returns null if not a straight line or diagonal
+   * 获取从一个位置到另一个位置的方向
+   * 如果不是直线或对角线则返回 null
    * 
-   * @param from Start position
-   * @param to End position
-   * @returns Direction or null
+   * @param from 起始位置
+   * @param to 目标位置
+   * @returns 方向或 null
    */
   static getDirection(from: Position, to: Position): Direction | null {
     const rowDiff = to.row - from.row
     const colDiff = to.col - from.col
 
-    // Normalize to get direction
+    // 归一化获取方向
     const rowDir = rowDiff === 0 ? 0 : rowDiff / Math.abs(rowDiff)
     const colDir = colDiff === 0 ? 0 : colDiff / Math.abs(colDiff)
 
-    // Find matching direction
+    // 查找匹配的方向
     for (const [dir, vector] of Object.entries(DIRECTION_VECTORS)) {
       if (vector.row === rowDir && vector.col === colDir) {
         return dir as Direction
@@ -70,12 +70,12 @@ export class MoveValidator {
   }
 
   /**
-   * Get path positions from start to end (not including start, including end)
-   * Returns empty array if path is not straight line or diagonal
+   * 获取从起点到终点的路径位置（不含起点，含终点）
+   * 如果路径不是直线或对角线则返回空数组
    * 
-   * @param from Start position
-   * @param to End position
-   * @returns Array of positions along the path
+   * @param from 起始位置
+   * @param to 目标位置
+   * @returns 路径上的位置数组
    */
   static getPath(from: Position, to: Position): Position[] {
     const direction = this.getDirection(from, to)
@@ -97,12 +97,12 @@ export class MoveValidator {
   }
 
   /**
-   * Get position in a specific direction by N steps
+   * 获取指定方向上 N 步后的位置
    * 
-   * @param position Start position
-   * @param direction Direction to move
-   * @param steps Number of steps
-   * @returns Target position
+   * @param position 起始位置
+   * @param direction 移动方向
+   * @param steps 步数
+   * @returns 目标位置
    */
   static getPositionInDirection(
     position: Position,
@@ -117,13 +117,13 @@ export class MoveValidator {
   }
 
   /**
-   * Validate a move
+   * 验证移动的合法性
    * 
-   * @param piece Piece to move
-   * @param toPosition Target position
-   * @param board Game board
-   * @param newRotation Optional new rotation
-   * @returns Validation result
+   * @param piece 要移动的棋子
+   * @param toPosition 目标位置
+   * @param board 游戏棋盘
+   * @param newRotation 可选的新旋转角度
+   * @returns 验证结果
    */
   static validateMove(
     piece: ChessPiece,
@@ -131,7 +131,7 @@ export class MoveValidator {
     board: BoardCell[][],
     newRotation?: Rotation
   ): MoveValidation {
-    // 1. Check if piece is on board
+    // 1. 检查棋子是否在棋盘上
     if (!piece.isOnBoard || !piece.position) {
       return {
         valid: false,
@@ -141,7 +141,7 @@ export class MoveValidator {
 
     const from = piece.position
 
-    // 2. Check if target position is valid
+    // 2. 检查目标位置是否有效
     if (!isValidPosition(toPosition, board.length)) {
       return {
         valid: false,
@@ -149,10 +149,16 @@ export class MoveValidator {
       }
     }
 
-    // 3. Check if moving to same position (rotation only)
+    // 3. 检查是否移动到相同位置（仅旋转）
     if (positionsEqual(from, toPosition)) {
       if (newRotation !== undefined && newRotation !== piece.rotation) {
-        // In-place rotation (future feature for bird pieces)
+        // 原地旋转：只有鸟类棋子可以
+        if (!piece.isBird) {
+          return {
+            valid: false,
+            reason: 'Only bird pieces can rotate in place'
+          }
+        }
         return { valid: true }
       }
       return {
@@ -161,7 +167,7 @@ export class MoveValidator {
       }
     }
 
-    // 4. Calculate distance and direction
+    // 4. 计算距离和方向
     const distance = this.calculateChebyshevDistance(from, toPosition)
     const direction = this.getDirection(from, toPosition)
 
@@ -172,47 +178,47 @@ export class MoveValidator {
       }
     }
 
-    // 5. Check move distance limits
-    if (distance < MIN_MOVE_STEPS || distance > MAX_MOVE_STEPS) {
+    // 5. 检查目标格子是否被占用（目标必须为空）
+    const targetCell = board[toPosition.row]?.[toPosition.col]
+    if (!targetCell) {
       return {
         valid: false,
-        reason: `Must move ${MIN_MOVE_STEPS}-${MAX_MOVE_STEPS} cells`
+        reason: 'Invalid target position'
+      }
+    }
+    
+    // 目标格子必须为空（不可重叠）
+    if (targetCell.pieces.length > 0) {
+      return {
+        valid: false,
+        reason: 'Target cell is occupied - pieces cannot overlap'
       }
     }
 
-    // 6. Check rotation constraints
-    const needsRotation = newRotation !== undefined && newRotation !== piece.rotation
-    if (needsRotation && distance > ROTATE_MOVE_LIMIT) {
+    // 6. 旋转规则检查
+    // - 如果距离 = 1：可以选择是否旋转
+    // - 如果距离 > 1：不能旋转（newRotation 必须是 undefined）
+    if (distance > 1 && newRotation !== undefined && newRotation !== piece.rotation) {
       return {
         valid: false,
-        reason: `Can only move ${ROTATE_MOVE_LIMIT} cell when rotating`
+        reason: 'Can only rotate when moving to adjacent cell (distance 1) or in place (birds only)'
       }
     }
+    
+    // 7. 没有距离限制 - 可以移动到棋盘任意空位置
 
-    // 7. Path is always clear (pieces can jump over others based on rules)
-    // No path checking needed for this game
-
-    // 8. Check if piece can fit at destination
-    const testRotation = newRotation ?? piece.rotation
-    const fitCheck = EdgeMatcher.checkFit(piece, toPosition, board, testRotation)
-
-    if (!fitCheck.canFit) {
-      return {
-        valid: false,
-        reason: 'Cannot fit at target position (no matching edges)'
-      }
+    return { 
+      valid: true
     }
-
-    return { valid: true }
   }
 
   /**
-   * Get all possible moves for a piece
+   * 获取棋子的所有可能移动
    * 
-   * @param piece Piece to check
-   * @param board Game board
-   * @param includeRotations Whether to include rotation options
-   * @returns Array of valid moves
+   * @param piece 要检查的棋子
+   * @param board 游戏棋盘
+   * @param includeRotations 是否包含旋转选项
+   * @returns 有效移动数组
    */
   static getPossibleMoves(
     piece: ChessPiece,

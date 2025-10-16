@@ -217,23 +217,23 @@ export interface ThreatInfo {
 }
 
 /**
- * Game state
+ * 游戏状态
  */
 export interface GameState {
   mode: GameMode
   currentPlayer: Player
-  board: BoardCell[][]          // 8x8 board
-  player1Pieces: ChessPiece[]
-  player2Pieces: ChessPiece[]
-  moveHistory: Move[]
-  passCount: {                  // Pass count
+  board: BoardCell[][]          // 棋盘（4×4 或 8×8）
+  player1Pieces: ChessPiece[]   // 玩家1的棋子
+  player2Pieces: ChessPiece[]   // 玩家2的棋子
+  moveHistory: Move[]           // 移动历史
+  passCount: {                  // 跳过次数
     player1: number
     player2: number
   }
-  winner: Player | null
-  threatInfo: ThreatInfo | null
-  turnNumber: number            // Turn counter
-  gameStartTime: number         // Game start timestamp
+  winner: Player | null         // 获胜者
+  threatInfo: ThreatInfo | null // 威胁信息（未使用）
+  turnNumber: number            // 回合数
+  gameStartTime: number         // 游戏开始时间戳
 }
 
 /**

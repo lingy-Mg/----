@@ -39,7 +39,7 @@ export class GameEngine {
   }
 
   /**
-   * Initialize game state
+   * 初始化游戏状态
    */
   private initializeGameState(): GameState {
     return {
@@ -118,42 +118,48 @@ export class GameEngine {
   }
 
   /**
-   * Execute a move
+   * 执行移动（每回合只能移动一次）
    */
   executeMove(move: Move): boolean {
     const { piece, from, to, newRotation } = move
 
-    // Validate move
+    // 计算移动距离
+    const distance = from ? Math.max(
+      Math.abs(to.row - from.row),
+      Math.abs(to.col - from.col)
+    ) : 0
+
+    // 基础验证
     const validation = MoveValidator.validateMove(piece, to, this.board.getCells(), newRotation)
     if (!validation.valid) {
       console.error('Invalid move:', validation.reason)
       return false
     }
 
-    // Check if it's the piece owner's turn
+    // 检查是否是当前玩家的棋子
     if (piece.player !== this.gameState.currentPlayer) {
       console.error('Not your turn')
       return false
     }
 
-    // Execute the move
+    // 执行移动
     if (from) {
       if (!this.board.movePiece(piece, from, to)) {
         return false
       }
     } else {
-      // First placement
+      // 初始放置
       if (!this.board.placePiece(piece, to)) {
         return false
       }
     }
 
-    // Update rotation if needed
+    // 更新旋转
     if (newRotation !== undefined) {
       piece.rotation = newRotation
     }
 
-    // Record move
+    // 记录移动
     this.gameState.moveHistory.push({
       ...move,
       timestamp: Date.now()
@@ -166,17 +172,17 @@ export class GameEngine {
       this.gameState.passCount.player2 = 0
     }
 
-    // Check for winner
+    // 检查胜利条件
     this.checkWinCondition()
 
-    // Switch turn
+    // 移动后自动切换回合
     this.switchTurn()
 
     return true
   }
 
   /**
-   * Switch to next player's turn
+   * 切换到下一个玩家的回合
    */
   switchTurn(): void {
     this.gameState.currentPlayer = 
@@ -244,6 +250,36 @@ export class GameEngine {
     }
 
     // Switch back turn
+    this.switchTurn()
+
+    return true
+  }
+
+  /**
+   * Rotate a piece by 90 degrees clockwise (原地旋转，仅鸟类可用)
+   * @param piece Piece to rotate
+   * @returns true if rotation successful, false otherwise
+   */
+  rotatePiece(piece: ChessPiece): boolean {
+    // 只有鸟类棋子可以原地旋转
+    if (!piece.isBird) {
+      console.error('Only bird pieces can rotate in place')
+      return false
+    }
+
+    // 检查是否是当前玩家的棋子
+    if (piece.player !== this.gameState.currentPlayer) {
+      console.error('Not your piece')
+      return false
+    }
+
+    // 执行旋转
+    const rotations: Rotation[] = [0, 90, 180, 270]
+    const currentIndex = rotations.indexOf(piece.rotation)
+    const nextIndex = (currentIndex + 1) % 4
+    piece.rotation = rotations[nextIndex]!
+
+    // 鸟类原地旋转后结束回合
     this.switchTurn()
 
     return true

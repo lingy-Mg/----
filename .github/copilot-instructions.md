@@ -199,13 +199,7 @@ describe('EdgeMatcher', () => {
 
 ## 文档导航
 
-在实现棋盘游戏特性前，务必先阅读以下文档：
-
-* `docs/README.md`：文档索引
-* `docs/DESIGN_SUMMARY.md`：10分钟速览
-* `docs/DESIGN_DOCUMENT.md`：完整算法伪代码（3.1~3.3节）
-* `docs/ROADMAP.md`：按天任务拆解
-* `docs/QUICK_DEV_GUIDE.md`：可直接复制的示例代码
+文档重新检索
 
 ---
 
@@ -236,40 +230,11 @@ describe('EdgeMatcher', () => {
    - ✅ GameEngine（游戏引擎）
    - ✅ PieceManager（棋子管理）
 
-2. **UI 功能**：
-   - ✅ ChessBoard.vue 组件
-   - ✅ 棋盘渲染（4×4 红色背景）
-   - ✅ 棋子选择与移动
-   - ✅ 旋转功能（R 键）
-   - ✅ 移动提示（绿色圆圈）
-   - ✅ 游戏状态显示
-   - ✅ 规则面板（5大模块）
-   - ✅ 设为首页
 
 3. **测试**：
-   - ✅ EdgeMatcher 单元测试
-   - ✅ MoveValidator 单元测试
-   - ✅ Board 单元测试
-   - ✅ GameEngine 单元测试
 
-### 🔄 待完成（当前任务）
+这是游戏,无法单元测试,开发完毕后我会测试功能.
 
-- [ ] SVG 文件加载验证
-- [ ] 添加旋转控制 UI 优化
-- [ ] AI 对手（暂不实现，见 TODO.md）
-- [ ] 在线对战（暂不实现，见 TODO.md）
-
----
-
-## MVP 实现优先级（参考）
-
-根据 `docs/ROADMAP.md`：
-
-1. **P0（MVP 1.0）** ✅：EdgeMatcher → MoveValidator → Board → GameEngine → 基础 UI
-2. **P1（MVP 2.0）** ⏸️：威胁机制 → 简易 AI（暂不实现）
-3. **P2（MVP 3.0）** ⏸️：高级 AI → 动画 → 状态持久化（暂不实现）
-
----
 
 ## 若遇不清楚部分
 
