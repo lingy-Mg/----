@@ -1,0 +1,17 @@
+<script setup lang="ts">
+import ChessBoard from '@/components/chess/ChessBoard.vue'
+</script>
+
+<template>
+  <div class="chess-view">
+    <ChessBoard />
+  </div>
+</template>
+
+<style scoped>
+.chess-view {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 2rem 0;
+}
+</style>

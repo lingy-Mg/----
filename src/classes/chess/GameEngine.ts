@@ -1,0 +1,356 @@
+/**
+ * GameEngine - Main Game Logic Controller
+ * Manages game state, turns, and rule enforcement
+ */
+
+import type {
+  GameState,
+  GameConfig,
+  GameMode,
+  Player,
+  ChessPiece,
+  Move,
+  Position,
+  Rotation
+} from '@/types/chess'
+import { Player as PlayerEnum, GameMode as GameModeEnum, generatePieceId } from '@/types/chess'
+import { Board } from './Board'
+import { MoveValidator } from './MoveValidator'
+import { EdgeMatcher } from './EdgeMatcher'
+import { DEFAULT_GAME_CONFIG, getStartRows, getFinishRows } from '@/constants/chess/board'
+import { getPieceShape } from '@/constants/chess/pieces'
+
+/**
+ * GameEngine manages the entire game flow
+ */
+export class GameEngine {
+  private gameState: GameState
+  private board: Board
+  private config: GameConfig
+
+  constructor(config?: Partial<GameConfig>) {
+    this.config = { 
+      ...DEFAULT_GAME_CONFIG, 
+      mode: config?.mode ?? GameModeEnum.PVP,
+      ...config 
+    }
+    this.board = new Board(this.config.boardSize)
+    this.gameState = this.initializeGameState()
+  }
+
+  /**
+   * Initialize game state
+   */
+  private initializeGameState(): GameState {
+    return {
+      mode: this.config.mode ?? GameModeEnum.PVP,
+      currentPlayer: PlayerEnum.PLAYER1,
+      board: this.board.getCells(),
+      player1Pieces: this.createPlayerPieces(PlayerEnum.PLAYER1),
+      player2Pieces: this.createPlayerPieces(PlayerEnum.PLAYER2),
+      moveHistory: [],
+      passCount: {
+        player1: 0,
+        player2: 0
+      },
+      winner: null,
+      threatInfo: null,
+      turnNumber: 0,
+      gameStartTime: Date.now()
+    }
+  }
+
+  /**
+   * Create pieces for a player
+   */
+  private createPlayerPieces(player: Player): ChessPiece[] {
+    const pieces: ChessPiece[] = []
+    
+    // Create pieces with different shapes (1-4)
+    for (let i = 0; i < this.config.piecesPerPlayer; i++) {
+      const shapeId = (i % 4) + 1 // Cycle through shapes 1-4
+      const piece: ChessPiece = {
+        id: generatePieceId(player, shapeId, i),
+        player,
+        shapeId,
+        rotation: 0,
+        position: null,
+        isOnBoard: false,
+        isBird: false // Future feature
+      }
+      pieces.push(piece)
+    }
+
+    return pieces
+  }
+
+  /**
+   * Start the game by placing initial pieces
+   */
+  startGame(): boolean {
+    // Place player 1's pieces in start zone
+    const player1StartRows = getStartRows(PlayerEnum.PLAYER1)
+    this.placeInitialPieces(this.gameState.player1Pieces, player1StartRows)
+
+    // Place player 2's pieces in start zone
+    const player2StartRows = getStartRows(PlayerEnum.PLAYER2)
+    this.placeInitialPieces(this.gameState.player2Pieces, player2StartRows)
+
+    return true
+  }
+
+  /**
+   * Place initial pieces in start zone
+   */
+  private placeInitialPieces(pieces: ChessPiece[], rows: number[]): void {
+    let pieceIndex = 0
+    
+    for (const row of rows) {
+      for (let col = 0; col < this.board.getSize() && pieceIndex < pieces.length; col++) {
+        const piece = pieces[pieceIndex]
+        if (piece) {
+          const position: Position = { row, col }
+          this.board.placePiece(piece, position)
+          pieceIndex++
+        }
+      }
+    }
+  }
+
+  /**
+   * Execute a move
+   */
+  executeMove(move: Move): boolean {
+    const { piece, from, to, newRotation } = move
+
+    // Validate move
+    const validation = MoveValidator.validateMove(piece, to, this.board.getCells(), newRotation)
+    if (!validation.valid) {
+      console.error('Invalid move:', validation.reason)
+      return false
+    }
+
+    // Check if it's the piece owner's turn
+    if (piece.player !== this.gameState.currentPlayer) {
+      console.error('Not your turn')
+      return false
+    }
+
+    // Execute the move
+    if (from) {
+      if (!this.board.movePiece(piece, from, to)) {
+        return false
+      }
+    } else {
+      // First placement
+      if (!this.board.placePiece(piece, to)) {
+        return false
+      }
+    }
+
+    // Update rotation if needed
+    if (newRotation !== undefined) {
+      piece.rotation = newRotation
+    }
+
+    // Record move
+    this.gameState.moveHistory.push({
+      ...move,
+      timestamp: Date.now()
+    })
+
+    // Reset pass count for current player
+    if (this.gameState.currentPlayer === PlayerEnum.PLAYER1) {
+      this.gameState.passCount.player1 = 0
+    } else {
+      this.gameState.passCount.player2 = 0
+    }
+
+    // Check for winner
+    this.checkWinCondition()
+
+    // Switch turn
+    this.switchTurn()
+
+    return true
+  }
+
+  /**
+   * Switch to next player's turn
+   */
+  switchTurn(): void {
+    this.gameState.currentPlayer = 
+      this.gameState.currentPlayer === PlayerEnum.PLAYER1 
+        ? PlayerEnum.PLAYER2 
+        : PlayerEnum.PLAYER1
+    
+    this.gameState.turnNumber++
+  }
+
+  /**
+   * Pass turn
+   */
+  pass(): boolean {
+    // Check if allowed to pass
+    const currentPassCount = this.gameState.currentPlayer === PlayerEnum.PLAYER1
+      ? this.gameState.passCount.player1
+      : this.gameState.passCount.player2
+
+    if (currentPassCount >= 1 && !this.config.allowPassTwice) {
+      console.error('Cannot pass twice in a row')
+      return false
+    }
+
+    // Increment pass count
+    if (this.gameState.currentPlayer === PlayerEnum.PLAYER1) {
+      this.gameState.passCount.player1++
+    } else {
+      this.gameState.passCount.player2++
+    }
+
+    // Switch turn
+    this.switchTurn()
+
+    return true
+  }
+
+  /**
+   * Undo last move
+   */
+  undo(): boolean {
+    if (this.gameState.moveHistory.length === 0) {
+      return false
+    }
+
+    const lastMove = this.gameState.moveHistory.pop()
+    if (!lastMove) return false
+
+    const { piece, from, to, newRotation } = lastMove
+
+    // Restore position
+    if (from) {
+      this.board.movePiece(piece, to, from)
+    } else {
+      this.board.removePiece(piece, to)
+    }
+
+    // Restore rotation
+    if (newRotation !== undefined && lastMove.needRotation) {
+      // Calculate original rotation
+      const rotations: Rotation[] = [0, 90, 180, 270]
+      const currentIndex = rotations.indexOf(newRotation)
+      const originalIndex = (currentIndex - 1 + 4) % 4
+      piece.rotation = rotations[originalIndex]!
+    }
+
+    // Switch back turn
+    this.switchTurn()
+
+    return true
+  }
+
+  /**
+   * Check win condition
+   */
+  private checkWinCondition(): void {
+    // Check Player 1 win: all pieces in finish zone
+    const player1Finish = getFinishRows(PlayerEnum.PLAYER1)
+    const player1Win = this.gameState.player1Pieces.every(piece => {
+      if (!piece.isOnBoard || !piece.position) return false
+      return player1Finish.includes(piece.position.row)
+    })
+
+    if (player1Win) {
+      this.gameState.winner = PlayerEnum.PLAYER1
+      return
+    }
+
+    // Check Player 2 win: all pieces in finish zone
+    const player2Finish = getFinishRows(PlayerEnum.PLAYER2)
+    const player2Win = this.gameState.player2Pieces.every(piece => {
+      if (!piece.isOnBoard || !piece.position) return false
+      return player2Finish.includes(piece.position.row)
+    })
+
+    if (player2Win) {
+      this.gameState.winner = PlayerEnum.PLAYER2
+    }
+  }
+
+  /**
+   * Get current game state
+   */
+  getGameState(): GameState {
+    return { ...this.gameState }
+  }
+
+  /**
+   * Get board
+   */
+  getBoard(): Board {
+    return this.board
+  }
+
+  /**
+   * Get current player
+   */
+  getCurrentPlayer(): Player {
+    return this.gameState.currentPlayer
+  }
+
+  /**
+   * Get winner
+   */
+  getWinner(): Player | null {
+    return this.gameState.winner
+  }
+
+  /**
+   * Check if game is over
+   */
+  isGameOver(): boolean {
+    return this.gameState.winner !== null
+  }
+
+  /**
+   * Get possible moves for current player
+   */
+  getPossibleMovesForCurrentPlayer(): Move[] {
+    const pieces = this.gameState.currentPlayer === PlayerEnum.PLAYER1
+      ? this.gameState.player1Pieces
+      : this.gameState.player2Pieces
+
+    const allMoves: Move[] = []
+
+    for (const piece of pieces) {
+      if (piece.isOnBoard) {
+        const moves = MoveValidator.getPossibleMoves(piece, this.board.getCells())
+        allMoves.push(...moves)
+      }
+    }
+
+    return allMoves
+  }
+
+  /**
+   * Get possible moves for a specific piece
+   */
+  getPossibleMovesForPiece(piece: ChessPiece): Move[] {
+    return MoveValidator.getPossibleMoves(piece, this.board.getCells())
+  }
+
+  /**
+   * Check if current player can move
+   */
+  canCurrentPlayerMove(): boolean {
+    return this.getPossibleMovesForCurrentPlayer().length > 0
+  }
+
+  /**
+   * Reset game
+   */
+  reset(): void {
+    this.board.clear()
+    this.gameState = this.initializeGameState()
+  }
+}
