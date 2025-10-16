@@ -48,6 +48,9 @@
         </div>
 
         <div class="control-buttons">
+          <button @click="handleRotate" :disabled="!selectedCell || !!winner" class="btn-rotate" title="旋转棋子 (R 键)">
+            <span class="rotate-icon">🔄</span> 旋转
+          </button>
           <button @click="handlePass" :disabled="!!winner" class="btn-secondary">
             跳过
           </button>
@@ -57,6 +60,15 @@
           <button @click="handleReset" class="btn-primary">
             重置
           </button>
+        </div>
+
+        <div class="keyboard-hints">
+          <span class="hint-item">
+            <kbd>R</kbd> 旋转棋子
+          </span>
+          <span class="hint-item">
+            <kbd>ESC</kbd> 取消选择
+          </span>
         </div>
 
         <div v-if="winner" class="winner-announcement">
@@ -120,11 +132,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { GameEngine } from '@/classes/chess/GameEngine'
 import { BOARD_SIZE, BOARD_DISPLAY } from '@/constants/chess/board'
 import { getPieceShape } from '@/constants/chess/pieces'
-import type { Player, Position, ChessPiece, BoardCell, GameMode } from '@/types/chess'
+import type { Player, Position, ChessPiece, BoardCell, GameMode, Move } from '@/types/chess'
 
 // 游戏引擎实例
 const gameEngine = ref<GameEngine | null>(null)
@@ -181,7 +193,7 @@ function getCellClass(cell: BoardCell): string[] {
   
   // 检查是否为可移动位置
   const isPossibleMove = possibleMoves.value.some(
-    pos => pos.row === cell.position.row && pos.col === cell.position.col
+    (pos: Position) => pos.row === cell.position.row && pos.col === cell.position.col
   )
   if (isPossibleMove) {
     classes.push('possible-move')
@@ -232,7 +244,7 @@ function calculatePossibleMoves(piece: ChessPiece): void {
   }
   
   const moves = gameEngine.value.getPossibleMovesForPiece(piece)
-  possibleMoves.value = moves.map(move => move.to)
+  possibleMoves.value = moves.map((move: Move) => move.to)
 }
 
 function handleCellClick(cell: BoardCell): void {
@@ -319,6 +331,7 @@ function handleUndo(): void {
   if (gameEngine.value && moveHistory.value.length > 0 && !winner.value) {
     gameEngine.value.undo()
     selectedCell.value = null
+    possibleMoves.value = []
   }
 }
 
@@ -326,8 +339,47 @@ function handleReset(): void {
   if (gameEngine.value) {
     gameEngine.value.startGame()
     selectedCell.value = null
+    possibleMoves.value = []
   }
 }
+
+function handleRotate(): void {
+  if (!selectedCell.value || !gameEngine.value || winner.value) return
+  
+  const cell = gameEngine.value.getBoard().getCell(selectedCell.value)
+  if (!cell || cell.pieces.length === 0) return
+  
+  const piece = cell.pieces[cell.pieces.length - 1]
+  if (piece && piece.player === currentPlayer.value) {
+    gameEngine.value.rotatePiece(piece)
+    // 旋转后重新计算可能的移动
+    calculatePossibleMoves(piece)
+  }
+}
+
+// 键盘事件处理
+function handleKeyPress(event: KeyboardEvent): void {
+  if (winner.value) return
+  
+  switch(event.key.toLowerCase()) {
+    case 'r':
+      handleRotate()
+      break
+    case 'escape':
+      selectedCell.value = null
+      possibleMoves.value = []
+      break
+  }
+}
+
+// 添加和移除键盘事件监听
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyPress)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyPress)
+})
 </script>
 
 <style scoped>
@@ -540,6 +592,57 @@ function handleReset(): void {
 .btn-secondary:hover:not(:disabled) {
   background: #e0e0e0;
   transform: translateY(-2px);
+}
+
+.btn-rotate {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-weight: bold;
+}
+
+.btn-rotate:hover:not(:disabled) {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  transform: translateY(-2px) rotate(-15deg);
+}
+
+.btn-rotate .rotate-icon {
+  display: inline-block;
+  transition: transform 0.3s ease;
+}
+
+.btn-rotate:hover:not(:disabled) .rotate-icon {
+  transform: rotate(180deg);
+}
+
+.keyboard-hints {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.hint-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.hint-item kbd {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background: #fff;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  font-size: 0.85rem;
+  color: #333;
+  box-shadow: 0 2px 0 #bbb;
 }
 
 .control-buttons button:disabled {
