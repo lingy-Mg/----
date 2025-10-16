@@ -6,9 +6,9 @@
 import { Player } from '@/types/chess'
 
 /**
- * Standard board size (8x8)
+ * Standard board size (4x4)
  */
-export const BOARD_SIZE = 8
+export const BOARD_SIZE = 4
 
 /**
  * Number of pieces per player
@@ -16,14 +16,14 @@ export const BOARD_SIZE = 8
 export const PIECES_PER_PLAYER = 4
 
 /**
- * Player 1 start zone rows (top 2 rows)
+ * Player 1 start zone rows (top 1 row)
  */
-export const PLAYER1_START_ROWS = [0, 1]
+export const PLAYER1_START_ROWS = [0]
 
 /**
- * Player 2 start zone rows (bottom 2 rows)
+ * Player 2 start zone rows (bottom 1 row)
  */
-export const PLAYER2_START_ROWS = [6, 7]
+export const PLAYER2_START_ROWS = [3]
 
 /**
  * Player 1 finish zone rows (opponent's start = Player 2's start)
@@ -96,13 +96,15 @@ export const DEFAULT_GAME_CONFIG = {
  * Board display configuration
  */
 export const BOARD_DISPLAY = {
-  cellSize: 80,           // px
-  gridColor: '#333333',
-  startZoneColor: '#e3f2fd',  // Light blue for player 1
-  finishZoneColor: '#ffebee', // Light red for player 2
-  highlightColor: '#4caf50',  // Green for valid moves
-  selectedColor: '#2196f3',   // Blue for selected piece
-  threatColor: '#f44336'      // Red for threats
+  cellSize: 100,          // px (larger for 4x4)
+  gridColor: '#ffffff',
+  backgroundColor: '#c62828', // Deep red background
+  startZoneColor: 'rgba(255,255,255,0.1)',
+  finishZoneColor: 'rgba(255,255,255,0.2)',
+  highlightColor: '#4caf50',
+  selectedColor: '#ffd700',
+  threatColor: '#f44336',
+  borderColor: '#ffffff'
 }
 
 /**

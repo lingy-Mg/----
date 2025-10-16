@@ -1,72 +1,77 @@
 <template>
-  <div class="chess-board-container">
-    <h2>Puzzle Chess - 拼图棋盘游戏</h2>
-    
-    <div class="game-info">
-      <div class="player-info player1" :class="{ active: currentPlayer === 1 }">
-        <span class="player-label">玩家 1 (蓝)</span>
-        <span class="piece-count">棋子: {{ player1Pieces.length }}</span>
-      </div>
-      
-      <div class="turn-info">
-        <div>回合: {{ turnNumber }}</div>
-        <div v-if="winner">
-          <strong>🎉 玩家 {{ winner }} 获胜！</strong>
-        </div>
-      </div>
-      
-      <div class="player-info player2" :class="{ active: currentPlayer === 2 }">
-        <span class="player-label">玩家 2 (红)</span>
-        <span class="piece-count">棋子: {{ player2Pieces.length }}</span>
-      </div>
-    </div>
-
-    <div class="chess-board" :style="boardStyle">
-      <div
-        v-for="(row, rowIndex) in boardCells"
-        :key="rowIndex"
-        class="board-row"
-      >
-        <div
-          v-for="(cell, colIndex) in row"
-          :key="colIndex"
-          class="board-cell"
-          :class="getCellClass(cell)"
-          @click="handleCellClick(cell)"
-        >
-          <div class="cell-coordinate">{{ rowIndex }},{{ colIndex }}</div>
-          
-          <!-- Render pieces in this cell -->
-          <div v-if="cell.pieces.length > 0" class="pieces-stack">
+  <div class="chess-game-container">
+    <!-- 游戏棋盘区域 -->
+    <div class="game-board-section">
+      <div class="chess-board-wrapper">
+        <div class="chess-board" :style="boardStyle">
+          <div
+            v-for="(row, rowIndex) in boardCells"
+            :key="rowIndex"
+            class="board-row"
+          >
             <div
-              v-for="piece in cell.pieces"
-              :key="piece.id"
-              class="piece"
-              :class="getPieceClass(piece)"
-              :style="getPieceStyle(piece)"
+              v-for="(cell, colIndex) in row"
+              :key="colIndex"
+              class="board-cell"
+              :class="getCellClass(cell)"
+              @click="handleCellClick(cell)"
             >
-              <span class="piece-label">{{ piece.shapeId }}</span>
+              <!-- 渲染棋子 -->
+              <div v-if="cell.pieces.length > 0" class="pieces-stack">
+                <img
+                  v-for="piece in cell.pieces"
+                  :key="piece.id"
+                  :src="getPieceSvg(piece)"
+                  :alt="`Piece ${piece.shapeId}`"
+                  class="piece-svg"
+                  :class="getPieceClass(piece)"
+                  :style="getPieceStyle(piece)"
+                />
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- 游戏控制区 -->
+      <div class="game-controls">
+        <div class="player-indicators">
+          <div class="player-indicator" :class="{ active: currentPlayer === 1 }">
+            <div class="indicator-dot player1"></div>
+            <span>玩家 1</span>
+          </div>
+          <div class="turn-display">回合 {{ turnNumber }}</div>
+          <div class="player-indicator" :class="{ active: currentPlayer === 2 }">
+            <div class="indicator-dot player2"></div>
+            <span>玩家 2</span>
+          </div>
+        </div>
+
+        <div class="control-buttons">
+          <button @click="handlePass" :disabled="!!winner" class="btn-secondary">
+            跳过
+          </button>
+          <button @click="handleUndo" :disabled="moveHistory.length === 0 || !!winner" class="btn-secondary">
+            悔棋
+          </button>
+          <button @click="handleReset" class="btn-primary">
+            重置
+          </button>
+        </div>
+
+        <div v-if="winner" class="winner-announcement">
+          🎉 玩家 {{ winner }} 获胜！
+        </div>
+      </div>
     </div>
 
-    <div class="controls">
-      <button @click="handlePass" :disabled="!!winner">
-        跳过回合
-      </button>
-      <button @click="handleUndo" :disabled="moveHistory.length === 0 || !!winner">
-        悔棋
-      </button>
-      <button @click="handleReset">
-        重新开始
-      </button>
-    </div>
-
-    <div class="debug-info" v-if="isDev">
-      <h3>调试信息</h3>
-      <pre>{{ debugInfo }}</pre>
+    <!-- 规则面板 -->
+    <div class="rules-panel">
+      <h3>游戏规则</h3>
+      <div class="rules-content">
+        <p>规则说明将在此处显示...</p>
+        <p>（请手动添加规则文本）</p>
+      </div>
     </div>
   </div>
 </template>
@@ -74,228 +79,210 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { GameEngine } from '@/classes/chess/GameEngine'
-import type { BoardCell, ChessPiece } from '@/types/chess'
-import { GameMode } from '@/types/chess'
-import { BOARD_DISPLAY } from '@/constants/chess/board'
+import { BOARD_SIZE, BOARD_DISPLAY } from '@/constants/chess/board'
+import { getPieceShape } from '@/constants/chess/pieces'
+import type { Player, Position, ChessPiece, BoardCell, GameMode } from '@/types/chess'
 
-// Game engine instance
-const engine = ref<GameEngine | null>(null)
+// 游戏引擎实例
+const gameEngine = ref<GameEngine | null>(null)
+const selectedCell = ref<Position | null>(null)
 
-// Reactive state
-const boardCells = ref<BoardCell[][]>([])
-const currentPlayer = ref(1)
-const turnNumber = ref(0)
-const winner = ref<number | null>(null)
-const moveHistory = ref<any[]>([])
-const player1Pieces = ref<ChessPiece[]>([])
-const player2Pieces = ref<ChessPiece[]>([])
-const selectedPiece = ref<ChessPiece | null>(null)
+// 初始化游戏
+onMounted(() => {
+  gameEngine.value = new GameEngine()
+  gameEngine.value.startGame()
+})
 
-// Dev mode
-const isDev = import.meta.env.DEV
+// 计算属性
+const boardCells = computed((): BoardCell[][] => {
+  if (!gameEngine.value) return []
+  return gameEngine.value.getBoard().getCells()
+})
 
-// Computed
-const boardStyle = computed(() => ({
-  gridTemplateColumns: `repeat(8, ${BOARD_DISPLAY.cellSize}px)`,
-  gridTemplateRows: `repeat(8, ${BOARD_DISPLAY.cellSize}px)`,
-}))
+const currentPlayer = computed((): Player => {
+  return gameEngine.value?.getGameState().currentPlayer || 1
+})
 
-const debugInfo = computed(() => ({
-  currentPlayer: currentPlayer.value,
-  turn: turnNumber.value,
-  winner: winner.value,
-  moves: moveHistory.value.length,
-  selected: selectedPiece.value?.id
-}))
+const turnNumber = computed((): number => {
+  return gameEngine.value?.getGameState().turnNumber || 1
+})
 
-// Methods
-function getCellClass(cell: BoardCell) {
+const winner = computed((): Player | null => {
+  return gameEngine.value?.getGameState().winner || null
+})
+
+const moveHistory = computed(() => {
+  return gameEngine.value?.getGameState().moveHistory || []
+})
+
+const boardStyle = computed(() => {
+  return {
+    display: 'grid',
+    gridTemplateColumns: `repeat(${BOARD_SIZE}, ${BOARD_DISPLAY.cellSize}px)`,
+    gridTemplateRows: `repeat(${BOARD_SIZE}, ${BOARD_DISPLAY.cellSize}px)`,
+    gap: '2px',
+    backgroundColor: BOARD_DISPLAY.backgroundColor,
+    padding: '10px',
+    borderRadius: '8px'
+  }
+})
+
+// 方法
+function getCellClass(cell: BoardCell): string[] {
   const classes: string[] = []
   
-  if (cell.isStartZone.player1) classes.push('start-zone-p1')
-  if (cell.isStartZone.player2) classes.push('start-zone-p2')
-  if (cell.isFinishZone.player1) classes.push('finish-zone-p1')
-  if (cell.isFinishZone.player2) classes.push('finish-zone-p2')
+  if (selectedCell.value?.row === cell.position.row && selectedCell.value?.col === cell.position.col) {
+    classes.push('selected')
+  }
+  
+  if (cell.isStartZone.player1) {
+    classes.push('start-zone-player1')
+  }
+  if (cell.isStartZone.player2) {
+    classes.push('start-zone-player2')
+  }
+  if (cell.isFinishZone.player1) {
+    classes.push('finish-zone-player1')
+  }
+  if (cell.isFinishZone.player2) {
+    classes.push('finish-zone-player2')
+  }
   
   return classes
 }
 
-function getPieceClass(piece: ChessPiece) {
-  return [
-    `player${piece.player}`,
-    selectedPiece.value?.id === piece.id ? 'selected' : ''
-  ]
+function getPieceClass(piece: ChessPiece): string[] {
+  const classes: string[] = []
+  classes.push(`player${piece.player}`)
+  classes.push(`rotation-${piece.rotation}`)
+  if (piece.isBird) {
+    classes.push('bird')
+  }
+  return classes
 }
 
-function getPieceStyle(piece: ChessPiece) {
+function getPieceStyle(piece: ChessPiece): Record<string, string> {
   return {
     transform: `rotate(${piece.rotation}deg)`
   }
 }
 
-function handleCellClick(cell: BoardCell) {
-  if (winner.value) return
+function getPieceSvg(piece: ChessPiece): string {
+  const shape = getPieceShape(piece.shapeId)
+  return shape.svgPath
+}
 
-  // If cell has pieces, select the top piece
-  if (cell.pieces.length > 0) {
+function handleCellClick(cell: BoardCell): void {
+  if (winner.value || !gameEngine.value) return
+
+  const pos = cell.position
+
+  // 如果没有选中格子且格子有当前玩家的棋子，选中它
+  if (!selectedCell.value && cell.pieces.length > 0) {
     const topPiece = cell.pieces[cell.pieces.length - 1]
-    
-    // Only select if it's current player's piece
     if (topPiece && topPiece.player === currentPlayer.value) {
-      selectedPiece.value = selectedPiece.value?.id === topPiece.id ? null : topPiece
-      console.log('Selected piece:', topPiece.id)
+      selectedCell.value = pos
     }
-  } else if (selectedPiece.value) {
-    // Try to move selected piece here
-    attemptMove(selectedPiece.value, cell.position)
+    return
+  }
+
+  // 如果已经选中格子
+  if (selectedCell.value) {
+    // 点击同一格子取消选中
+    if (selectedCell.value.row === pos.row && selectedCell.value.col === pos.col) {
+      selectedCell.value = null
+      return
+    }
+
+    // 获取选中的棋子
+    const fromCell = gameEngine.value.getBoard().getCell(selectedCell.value)
+    if (!fromCell || fromCell.pieces.length === 0) {
+      selectedCell.value = null
+      return
+    }
+
+    const piece = fromCell.pieces[fromCell.pieces.length - 1]
+    if (!piece) {
+      selectedCell.value = null
+      return
+    }
+
+    // 构建移动对象
+    const move = {
+      piece,
+      from: selectedCell.value,
+      to: pos,
+      steps: Math.max(Math.abs(pos.row - selectedCell.value.row), Math.abs(pos.col - selectedCell.value.col)),
+      needRotation: false,
+      canFit: true
+    }
+
+    // 尝试移动
+    const success = gameEngine.value.executeMove(move)
+    if (success) {
+      selectedCell.value = null
+    } else {
+      // 移动失败，尝试选中新格子的棋子
+      if (cell.pieces.length > 0) {
+        const topPiece = cell.pieces[cell.pieces.length - 1]
+        if (topPiece && topPiece.player === currentPlayer.value) {
+          selectedCell.value = pos
+        } else {
+          selectedCell.value = null
+        }
+      } else {
+        selectedCell.value = null
+      }
+    }
   }
 }
 
-function attemptMove(piece: ChessPiece, to: any) {
-  if (!engine.value) return
-
-  const move = {
-    piece,
-    from: piece.position,
-    to,
-    steps: 1,
-    needRotation: false,
-    canFit: true
-  }
-
-  const success = engine.value.executeMove(move)
-  
-  if (success) {
-    console.log('Move executed successfully')
-    updateGameState()
-    selectedPiece.value = null
-  } else {
-    console.error('Move failed')
+function handlePass(): void {
+  if (gameEngine.value && !winner.value) {
+    gameEngine.value.pass()
   }
 }
 
-function handlePass() {
-  if (!engine.value || winner.value) return
-  
-  const success = engine.value.pass()
-  if (success) {
-    updateGameState()
+function handleUndo(): void {
+  if (gameEngine.value && moveHistory.value.length > 0 && !winner.value) {
+    gameEngine.value.undo()
+    selectedCell.value = null
   }
 }
 
-function handleUndo() {
-  if (!engine.value || winner.value) return
-  
-  const success = engine.value.undo()
-  if (success) {
-    updateGameState()
+function handleReset(): void {
+  if (gameEngine.value) {
+    gameEngine.value.startGame()
+    selectedCell.value = null
   }
 }
-
-function handleReset() {
-  initGame()
-}
-
-function updateGameState() {
-  if (!engine.value) return
-
-  const state = engine.value.getGameState()
-  boardCells.value = engine.value.getBoard().getCells()
-  currentPlayer.value = state.currentPlayer
-  turnNumber.value = state.turnNumber
-  winner.value = state.winner
-  moveHistory.value = state.moveHistory
-  player1Pieces.value = state.player1Pieces
-  player2Pieces.value = state.player2Pieces
-}
-
-function initGame() {
-  // Create new game engine
-  engine.value = new GameEngine({
-    mode: GameMode.PVP,
-    boardSize: 8,
-    piecesPerPlayer: 4
-  })
-
-  // Start game
-  engine.value.startGame()
-  
-  // Update state
-  updateGameState()
-  
-  console.log('✅ Game initialized')
-  console.log('Player 1 pieces:', player1Pieces.value.length)
-  console.log('Player 2 pieces:', player2Pieces.value.length)
-}
-
-// Lifecycle
-onMounted(() => {
-  initGame()
-})
 </script>
 
 <style scoped>
-.chess-board-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 2rem;
-  gap: 1rem;
-}
-
-h2 {
-  margin: 0 0 1rem 0;
-  color: #2c3e50;
-}
-
-.game-info {
+.chess-game-container {
   display: flex;
   gap: 2rem;
-  align-items: center;
-  margin-bottom: 1rem;
+  padding: 2rem;
+  min-height: 100vh;
+  align-items: flex-start;
 }
 
-.player-info {
+/* 游戏棋盘区域 */
+.game-board-section {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  background: #f5f5f5;
-  min-width: 120px;
+  align-items: center;
+  gap: 2rem;
 }
 
-.player-info.player1 {
-  border-left: 4px solid #2196f3;
-}
-
-.player-info.player2 {
-  border-left: 4px solid #f44336;
-}
-
-.player-info.active {
-  background: #fff3cd;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.player-label {
-  font-weight: bold;
-  font-size: 0.9rem;
-}
-
-.piece-count {
-  font-size: 0.85rem;
-  color: #666;
-}
-
-.turn-info {
-  text-align: center;
-  font-size: 1.1rem;
+.chess-board-wrapper {
+  display: flex;
+  justify-content: center;
 }
 
 .chess-board {
-  display: grid;
-  border: 2px solid #333;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
 .board-row {
@@ -304,44 +291,41 @@ h2 {
 
 .board-cell {
   position: relative;
-  border: 1px solid #999;
-  background: #fff;
+  background-color: white;
+  border: 2px solid white;
   cursor: pointer;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s;
 }
 
 .board-cell:hover {
-  background: #f0f0f0;
+  background-color: rgba(255, 255, 255, 0.9);
 }
 
-.board-cell.start-zone-p1 {
-  background: #e3f2fd;
+.board-cell.selected {
+  background-color: rgba(255, 235, 59, 0.5);
+  border-color: #ffd700;
 }
 
-.board-cell.start-zone-p2 {
-  background: #ffebee;
+.board-cell.start-zone-player1 {
+  background-color: rgba(33, 150, 243, 0.1);
 }
 
-.board-cell.finish-zone-p1 {
-  background: #c8e6c9;
+.board-cell.start-zone-player2 {
+  background-color: rgba(244, 67, 54, 0.1);
 }
 
-.board-cell.finish-zone-p2 {
-  background: #fff9c4;
+.board-cell.finish-zone-player1 {
+  background-color: rgba(76, 175, 80, 0.15);
 }
 
-.cell-coordinate {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  font-size: 0.65rem;
-  color: #999;
-  pointer-events: none;
+.board-cell.finish-zone-player2 {
+  background-color: rgba(156, 39, 176, 0.15);
 }
 
+/* 棋子样式 */
 .pieces-stack {
   position: relative;
   width: 100%;
@@ -351,77 +335,162 @@ h2 {
   justify-content: center;
 }
 
-.piece {
-  width: 60%;
-  height: 60%;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  color: white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  transition: all 0.3s;
+.piece-svg {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+  transition: transform 0.3s ease;
+  pointer-events: none;
 }
 
-.piece.player1 {
+.piece-svg.player1 {
+  filter: drop-shadow(0 2px 4px rgba(33, 150, 243, 0.3));
+}
+
+.piece-svg.player2 {
+  filter: drop-shadow(0 2px 4px rgba(244, 67, 54, 0.3));
+}
+
+/* 游戏控制区 */
+.game-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 500px;
+}
+
+.player-indicators {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.player-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  opacity: 0.5;
+}
+
+.player-indicator.active {
+  opacity: 1;
+  background: rgba(255, 235, 59, 0.2);
+  transform: scale(1.05);
+}
+
+.indicator-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.indicator-dot.player1 {
   background: #2196f3;
 }
 
-.piece.player2 {
+.indicator-dot.player2 {
   background: #f44336;
 }
 
-.piece.selected {
-  transform: scale(1.2);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.3), 0 0 0 3px #ffd700;
+.turn-display {
+  font-weight: bold;
+  font-size: 1.1rem;
+  color: #333;
 }
 
-.piece-label {
-  font-size: 1.2rem;
-}
-
-.controls {
+.control-buttons {
   display: flex;
   gap: 1rem;
-  margin-top: 1rem;
+  justify-content: center;
 }
 
-button {
-  padding: 0.5rem 1.5rem;
+.control-buttons button {
+  padding: 0.75rem 1.5rem;
   font-size: 1rem;
   border: none;
-  border-radius: 4px;
-  background: #4caf50;
-  color: white;
+  border-radius: 8px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s ease;
+  font-weight: 500;
 }
 
-button:hover:not(:disabled) {
-  background: #45a049;
+.btn-primary {
+  background: #2196f3;
+  color: white;
 }
 
-button:disabled {
-  background: #ccc;
+.btn-primary:hover:not(:disabled) {
+  background: #1976d2;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.btn-secondary {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #e0e0e0;
+  transform: translateY(-2px);
+}
+
+.control-buttons button:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.debug-info {
-  margin-top: 2rem;
+.winner-announcement {
   padding: 1rem;
-  background: #f5f5f5;
-  border-radius: 4px;
-  max-width: 600px;
-  width: 100%;
+  text-align: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  animation: pulse 1.5s ease-in-out infinite;
 }
 
-.debug-info h3 {
-  margin-top: 0;
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
 }
 
-.debug-info pre {
-  overflow-x: auto;
-  font-size: 0.85rem;
+/* 规则面板 */
+.rules-panel {
+  width: 300px;
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.rules-panel h3 {
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-size: 1.2rem;
+  border-bottom: 2px solid #2196f3;
+  padding-bottom: 0.5rem;
+}
+
+.rules-content {
+  color: #666;
+  line-height: 1.6;
+}
+
+.rules-content p {
+  margin: 0.5rem 0;
 }
 </style>

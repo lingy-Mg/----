@@ -23,7 +23,7 @@ export const PIECE_1: PieceShape = {
     bottom: '1`-',
     left: '1-'
   },
-  svgPath: '/src/assets/pieces/piece1.svg'
+  svgPath: '/SVG/资源 1.svg'
 }
 
 /**
@@ -44,7 +44,7 @@ export const PIECE_2: PieceShape = {
     bottom: '1`-',
     left: '1`+'
   },
-  svgPath: '/src/assets/pieces/piece2.svg'
+  svgPath: '/SVG/资源 2.svg'
 }
 
 /**
@@ -65,7 +65,7 @@ export const PIECE_3: PieceShape = {
     bottom: '1`-',
     left: '1+'
   },
-  svgPath: '/src/assets/pieces/piece3.svg'
+  svgPath: '/SVG/资源 3.svg'
 }
 
 /**
@@ -86,7 +86,7 @@ export const PIECE_4: PieceShape = {
     bottom: '1`+',
     left: '1+'
   },
-  svgPath: '/src/assets/pieces/piece4.svg'
+  svgPath: '/SVG/资源 4.svg'
 }
 
 /**
