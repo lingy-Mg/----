@@ -20,7 +20,8 @@
       </div>
 
       <div class="chess-board-wrapper">
-        <div class="chess-board" :style="boardStyle" aria-label="棋盘">
+        <!-- 棋盘背景层（独立绘制，最底层） -->
+        <div class="chess-board-background" :style="boardStyle" aria-label="棋盘">
           <div
             v-for="(row, rowIndex) in boardCells"
             :key="rowIndex"
@@ -32,11 +33,42 @@
               class="board-cell"
               :class="[
                 getCellClass(cell),
-                (rowIndex + colIndex) % 2 === 1 ? 'board-cell--dark' : 'board-cell--light',
-                isCellClickable(cell, rowIndex, colIndex) ? 'clickable' : ''
+                (rowIndex + colIndex) % 2 === 1 ? 'board-cell--dark' : 'board-cell--light'
               ]"
-              @click="handleCellClick(cell)"
+              @mouseenter="handleCellHover(cell)"
+              @mouseleave="handleCellLeave(cell)"
               :title="cellTooltip(cell, rowIndex, colIndex)"
+            >
+              <!-- 棋子预览（悬停在可移动位置时显示） -->
+              <div 
+                v-if="shouldShowPiecePreview(cell)"
+                class="piece-preview"
+              >
+                <img
+                  :src="getPreviewPieceSvg()"
+                  :alt="`预览棋子`"
+                  class="piece-svg piece-preview-img"
+                  :style="getPreviewPieceStyle()"
+                  draggable="false"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 棋子浮动层（完全独立，上层显示） -->
+        <div class="chess-pieces-layer">
+          <div
+            v-for="(row, rowIndex) in boardCells"
+            :key="`pieces-${rowIndex}`"
+            class="pieces-row"
+          >
+            <div
+              v-for="(cell, colIndex) in row"
+              :key="`pieces-${colIndex}`"
+              class="pieces-cell"
+              :style="getPieceCellPosition(rowIndex, colIndex)"
+              @click="handleEmptyCellClick(cell)"
             >
               <!-- 渲染棋子 -->
               <div v-if="cell.pieces.length > 0" class="pieces-stack">
@@ -45,6 +77,7 @@
                   :key="piece.id"
                   class="piece-wrapper"
                   :class="getPieceWrapperClass(piece)"
+                  @click.stop="handlePieceClick(piece)"
                 >
                   <img
                     :src="getPieceSvg(piece)"
@@ -54,6 +87,12 @@
                     :style="getPieceStyle(piece)"
                     draggable="false"
                   />
+                  
+                  <!-- 选中指示器 -->
+                  <div 
+                    v-if="isSelectedPiece(piece)"
+                    class="selection-indicator"
+                  ></div>
                 </div>
               </div>
             </div>
@@ -132,13 +171,92 @@
       </div>
     </div>
 
+    <!-- 调试面板 -->
+    <div class="debug-panel" v-if="showDebug">
+      <div class="debug-header">
+        <h3>🔧 高级调试工具 <span style="font-size: 14px; opacity: 0.8;">v2.0</span></h3>
+        <button class="debug-close-btn" @click="showDebug = false">
+          ✕ 关闭
+        </button>
+      </div>
+      <div class="debug-content">
+        <!-- 全局操作区 -->
+        <div class="debug-global-controls">
+          <button @click="resetAllDebugSettings" class="btn-reset-all">
+            🔄 重置所有设置
+          </button>
+          <button @click="exportDebugSettings" class="btn-export">
+            📤 导出设置
+          </button>
+          <button @click="importDebugSettings" class="btn-import">
+            📥 导入设置
+          </button>
+        </div>
+
+        <!-- 各棋子控制区 -->
+        <div v-for="shapeId in [1, 2, 3, 4]" :key="shapeId" class="debug-shape-control">
+          <h4>🧩 棋子类型 {{ shapeId }} 
+            <span style="font-size: 14px; font-weight: normal; color: #666;">
+              ({{ shapeId === 4 ? '鸟类' : '普通' }})
+            </span>
+          </h4>
+          <div class="debug-controls">
+            <label>
+              <span class="control-label">🔍 缩放倍率 <small>(0.1x - 5.0x)</small>:</span>
+              <input 
+                v-model.number="debugSettings.shapes[shapeId]!.scale" 
+                type="range" 
+                min="0.1" 
+                max="5" 
+                step="0.1"
+                @input="updateDebugStyle"
+              />
+              <span class="debug-value">{{ debugSettings.shapes[shapeId]!.scale.toFixed(1) }}x</span>
+            </label>
+            <label>
+              <span class="control-label">➡️ X轴偏移 <small>(-100px ~ +100px)</small>:</span>
+              <input 
+                v-model.number="debugSettings.shapes[shapeId]!.offsetX" 
+                type="range" 
+                min="-100" 
+                max="100" 
+                step="1"
+                @input="updateDebugStyle"
+              />
+              <span class="debug-value">{{ debugSettings.shapes[shapeId]!.offsetX }}px</span>
+            </label>
+            <label>
+              <span class="control-label">⬇️ Y轴偏移 <small>(-100px ~ +100px)</small>:</span>
+              <input 
+                v-model.number="debugSettings.shapes[shapeId]!.offsetY" 
+                type="range" 
+                min="-100" 
+                max="100" 
+                step="1"
+                @input="updateDebugStyle"
+              />
+              <span class="debug-value">{{ debugSettings.shapes[shapeId]!.offsetY }}px</span>
+            </label>
+            <div class="control-actions">
+              <button @click="resetShape(shapeId)" class="btn-reset">🔄 重置此棋子</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 规则面板 -->
     <div class="rules-panel" :class="{ collapsed: !showRules }">
       <div class="rules-header">
         <h3>🎮 游戏规则</h3>
-        <button class="rules-toggle" @click="showRules = !showRules" :aria-expanded="showRules">
-          {{ showRules ? '收起' : '展开' }}
-        </button>
+        <div class="rules-controls">
+          <button class="debug-toggle" @click="showDebug = !showDebug">
+            {{ showDebug ? '关闭调试' : '调试工具' }}
+          </button>
+          <button class="rules-toggle" @click="showRules = !showRules" :aria-expanded="showRules">
+            {{ showRules ? '收起' : '展开' }}
+          </button>
+        </div>
       </div>
 
       <div class="rules-content" v-show="showRules">
@@ -252,11 +370,46 @@ const gameEngine = ref<GameEngine | null>(null)
 const selectedCell = ref<Position | null>(null)
 const possibleMoves = ref<Position[]>([])
 const showRules = ref(true) // 规则面板折叠开关
+const showDebug = ref(false) // 调试面板开关
+const hoveredCell = ref<Position | null>(null) // 鼠标悬停的格子
+
+// 调试设置
+const debugSettings = ref({
+  shapes: {
+    1: { scale: 1, offsetX: 0, offsetY: 0 },
+    2: { scale: 1, offsetX: 0, offsetY: 0 },
+    3: { scale: 1, offsetX: 0, offsetY: 0 },
+    4: { scale: 1, offsetX: 0, offsetY: 0 }
+  } as Record<number, { scale: number; offsetX: number; offsetY: number }>
+})
+
+/**
+ * 从 localStorage 加载调试设置
+ */
+function loadDebugSettings(): void {
+  try {
+    const saved = localStorage.getItem('chess-debug-settings')
+    if (saved) {
+      const parsedSettings = JSON.parse(saved)
+      // 验证数据结构
+      if (parsedSettings.shapes && typeof parsedSettings.shapes === 'object') {
+        debugSettings.value = { ...debugSettings.value, ...parsedSettings }
+        console.log('已加载调试设置:', debugSettings.value)
+        applyGlobalDebugStyles()
+      }
+    }
+  } catch (e) {
+    console.warn('无法加载调试设置:', e)
+  }
+}
 
 // 初始化游戏
 onMounted(() => {
   gameEngine.value = new GameEngine()
   gameEngine.value.startGame()
+  
+  // 加载调试设置
+  loadDebugSettings()
 })
 
 // 计算属性
@@ -364,7 +517,12 @@ function cellTooltip(cell: BoardCell, _rowIndex: number, _colIndex: number): str
 function getPieceWrapperClass(piece: ChessPiece): string[] {
   const classes: string[] = []
   classes.push(`player${piece.player}-wrapper`)
-  if (piece.player === currentPlayer.value) classes.push('current-player-wrapper')
+  
+  // 只有当前回合的玩家棋子才显示高亮
+  if (piece.player === currentPlayer.value) {
+    classes.push('current-player-wrapper')
+    classes.push('current-turn-highlight')
+  }
   return classes
 }
 
@@ -375,16 +533,26 @@ function getPieceClass(piece: ChessPiece): string[] {
   const classes: string[] = []
   classes.push(`player${piece.player}`)
   if (piece.isBird) classes.push('bird')
-  if (piece.player === currentPlayer.value) classes.push('current-player-piece')
+  
+  // 只有当前回合的玩家棋子才显示当前玩家样式
+  if (piece.player === currentPlayer.value) {
+    classes.push('current-player-piece')
+    classes.push('active-turn-piece')
+  }
   return classes
 }
 
 /**
- * 棋子内联样式（旋转）
+ * 棋子内联样式（旋转 + 调试设置）
  */
 function getPieceStyle(piece: ChessPiece): Record<string, string> {
+  const debugSetting = debugSettings.value.shapes[piece.shapeId]
+  const scale = debugSetting?.scale || 1
+  const offsetX = debugSetting?.offsetX || 0
+  const offsetY = debugSetting?.offsetY || 0
+  
   return {
-    transform: `rotate(${piece.rotation}deg)`
+    transform: `rotate(${piece.rotation}deg) scale(${scale}) translate(${offsetX}px, ${offsetY}px)`
   }
 }
 
@@ -406,6 +574,77 @@ function calculatePossibleMoves(piece: ChessPiece): void {
   }
   const moves = gameEngine.value.getPossibleMovesForPiece(piece)
   possibleMoves.value = moves.map((move: Move) => move.to)
+}
+
+/**
+ * 点击棋子处理 - 直接选中棋子
+ */
+function handlePieceClick(piece: ChessPiece): void {
+  if (winner.value || !gameEngine.value) return
+  
+  // 只能选择当前玩家的棋子
+  if (piece.player !== currentPlayer.value) return
+  
+  const pos = piece.position
+  if (!pos) return
+  
+  // 选中该棋子
+  selectedCell.value = pos
+  calculatePossibleMoves(piece)
+}
+
+/**
+ * 点击空位处理 - 移动棋子或取消选中
+ */
+function handleEmptyCellClick(cell: BoardCell): void {
+  if (winner.value || !gameEngine.value) return
+
+  const pos = cell.position
+
+  // 如果有选中的棋子，尝试移动
+  if (selectedCell.value) {
+    // 如果点击的是当前选中的位置，取消选中
+    if (selectedCell.value.row === pos.row && selectedCell.value.col === pos.col) {
+      selectedCell.value = null
+      possibleMoves.value = []
+      return
+    }
+
+    // 尝试移动到该位置
+    const fromCell = gameEngine.value.getBoard().getCell(selectedCell.value)
+    if (!fromCell || fromCell.pieces.length === 0) {
+      selectedCell.value = null
+      possibleMoves.value = []
+      return
+    }
+    
+    const piece = fromCell.pieces[fromCell.pieces.length - 1]
+    if (!piece) {
+      selectedCell.value = null
+      possibleMoves.value = []
+      return
+    }
+
+    // 构建移动对象并尝试执行
+    const move: Move = {
+      piece,
+      from: selectedCell.value,
+      to: pos
+    }
+
+    if (gameEngine.value.executeMove(move)) {
+      selectedCell.value = null
+      possibleMoves.value = []
+    }
+  }
+  // 如果点击空位且有该位置的棋子属于当前玩家，选中棋子
+  else if (cell.pieces.length > 0) {
+    const topPiece = cell.pieces[cell.pieces.length - 1]
+    if (topPiece && topPiece.player === currentPlayer.value) {
+      selectedCell.value = pos
+      calculatePossibleMoves(topPiece)
+    }
+  }
 }
 
 /**
@@ -532,6 +771,246 @@ function handleRotate(): void {
   }
 }
 
+// ===== 调试方法 =====
+
+/**
+ * 更新调试样式
+ * 由于 Vue 的响应式系统，调试设置的改变会自动触发棋子样式更新
+ * 这里可以添加额外的调试逻辑，如保存设置、应用全局样式等
+ */
+function updateDebugStyle(): void {
+  console.log('调试设置已更新:', debugSettings.value)
+  
+  // 可选：保存调试设置到 localStorage
+  try {
+    localStorage.setItem('chess-debug-settings', JSON.stringify(debugSettings.value))
+  } catch (e) {
+    console.warn('无法保存调试设置到 localStorage:', e)
+  }
+  
+  // 可选：应用全局 CSS 变量（用于更复杂的样式调试）
+  applyGlobalDebugStyles()
+}
+
+/**
+ * 应用全局调试样式变量
+ */
+function applyGlobalDebugStyles(): void {
+  const root = document.documentElement
+  
+  // 为每个棋子类型设置 CSS 变量
+  for (let i = 1; i <= 4; i++) {
+    const setting = debugSettings.value.shapes[i]
+    if (setting) {
+      root.style.setProperty(`--debug-shape-${i}-scale`, setting.scale.toString())
+      root.style.setProperty(`--debug-shape-${i}-offset-x`, `${setting.offsetX}px`)
+      root.style.setProperty(`--debug-shape-${i}-offset-y`, `${setting.offsetY}px`)
+    }
+  }
+}
+
+/**
+ * 重置特定形状的调试设置
+ */
+function resetShape(shapeId: number): void {
+  if (debugSettings.value.shapes[shapeId]) {
+    debugSettings.value.shapes[shapeId] = {
+      scale: 1,
+      offsetX: 0,
+      offsetY: 0
+    }
+    updateDebugStyle()
+    console.log(`已重置棋子 ${shapeId} 的调试设置`)
+  }
+}
+
+/**
+ * 重置所有调试设置
+ */
+function resetAllDebugSettings(): void {
+  for (let i = 1; i <= 4; i++) {
+    debugSettings.value.shapes[i] = {
+      scale: 1,
+      offsetX: 0,
+      offsetY: 0
+    }
+  }
+  updateDebugStyle()
+  console.log('已重置所有调试设置')
+}
+
+/**
+ * 导出调试设置
+ */
+function exportDebugSettings(): void {
+  try {
+    const settings = JSON.stringify(debugSettings.value, null, 2)
+    const blob = new Blob([settings], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'chess-debug-settings.json'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    
+    console.log('调试设置已导出')
+  } catch (e) {
+    console.error('导出调试设置失败:', e)
+    alert('导出失败，请查看控制台')
+  }
+}
+
+/**
+ * 导入调试设置
+ */
+function importDebugSettings(): void {
+  try {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    
+    input.onchange = (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const settings = JSON.parse(e.target?.result as string)
+          
+          // 验证导入的数据结构
+          if (settings.shapes && typeof settings.shapes === 'object') {
+            debugSettings.value = settings
+            updateDebugStyle()
+            console.log('调试设置已导入:', settings)
+            alert('设置导入成功！')
+          } else {
+            throw new Error('无效的设置文件格式')
+          }
+        } catch (err) {
+          console.error('导入设置失败:', err)
+          alert('导入失败：文件格式无效')
+        }
+      }
+      reader.readAsText(file)
+    }
+    
+    input.click()
+  } catch (e) {
+    console.error('导入调试设置失败:', e)
+    alert('导入失败，请查看控制台')
+  }
+}
+
+/**
+ * 检查棋子是否被选中
+ */
+function isSelectedPiece(piece: ChessPiece): boolean {
+  if (!selectedCell.value || !piece.position) return false
+  
+  // 检查棋子是否在选中的格子中，且是顶层棋子
+  const isInSelectedCell = piece.position.row === selectedCell.value.row && 
+                           piece.position.col === selectedCell.value.col
+  
+  if (!isInSelectedCell || !gameEngine.value) return false
+  
+  const cell = gameEngine.value.getBoard().getCell(selectedCell.value)
+  if (!cell || cell.pieces.length === 0) return false
+  
+  const topPiece = cell.pieces[cell.pieces.length - 1]
+  return topPiece?.id === piece.id
+}
+
+/**
+ * 鼠标进入格子
+ */
+function handleCellHover(cell: BoardCell): void {
+  hoveredCell.value = cell.position
+}
+
+/**
+ * 鼠标离开格子
+ */
+function handleCellLeave(cell: BoardCell): void {
+  if (hoveredCell.value?.row === cell.position.row && 
+      hoveredCell.value?.col === cell.position.col) {
+    hoveredCell.value = null
+  }
+}
+
+/**
+ * 是否应显示棋子预览
+ */
+function shouldShowPiecePreview(cell: BoardCell): boolean {
+  if (!selectedCell.value || !hoveredCell.value || !gameEngine.value) return false
+  
+  // 必须悬停在当前格子上
+  const isCurrentHovered = hoveredCell.value.row === cell.position.row && 
+                           hoveredCell.value.col === cell.position.col
+  if (!isCurrentHovered) return false
+  
+  // 必须是空格子且在可移动位置列表中
+  if (cell.pieces.length > 0) return false
+  
+  const isPossibleMove = possibleMoves.value.some(
+    (pos: Position) => pos.row === cell.position.row && pos.col === cell.position.col
+  )
+  
+  return isPossibleMove
+}
+
+/**
+ * 获取预览棋子的 SVG
+ */
+function getPreviewPieceSvg(): string {
+  if (!selectedCell.value || !gameEngine.value) return ''
+  
+  const selectedCellData = gameEngine.value.getBoard().getCell(selectedCell.value)
+  if (!selectedCellData || selectedCellData.pieces.length === 0) return ''
+  
+  const topPiece = selectedCellData.pieces[selectedCellData.pieces.length - 1]
+  return topPiece ? getPieceSvg(topPiece) : ''
+}
+
+/**
+ * 获取预览棋子的样式
+ */
+function getPreviewPieceStyle(): Record<string, string> {
+  if (!selectedCell.value || !gameEngine.value) return {}
+  
+  const selectedCellData = gameEngine.value.getBoard().getCell(selectedCell.value)
+  if (!selectedCellData || selectedCellData.pieces.length === 0) return {}
+  
+  const topPiece = selectedCellData.pieces[selectedCellData.pieces.length - 1]
+  if (!topPiece) return {}
+  
+  return {
+    transform: `rotate(${topPiece.rotation}deg)`,
+    opacity: '0.5'  // 半透明预览效果
+  }
+}
+
+/**
+ * 计算棋子格子的绝对位置（用于浮动层）
+ */
+function getPieceCellPosition(rowIndex: number, colIndex: number): Record<string, string> {
+  const cellSize = BOARD_DISPLAY.cellSize
+  const gap = 2 // 格子间距，与CSS中的gap保持一致
+  const padding = 10 // 背景棋盘的 padding，需要加上这个偏移
+  
+  return {
+    position: 'absolute',
+    left: `${padding + colIndex * (cellSize + gap)}px`,
+    top: `${padding + rowIndex * (cellSize + gap)}px`,
+    width: `${cellSize}px`,
+    height: `${cellSize}px`,
+    pointerEvents: 'auto' // 允许棋子响应点击事件
+  }
+}
+
 /**
  * 键盘事件
  */
@@ -603,6 +1082,8 @@ onUnmounted(() => {
   min-height: 100vh;
   align-items: flex-start;
   background: var(--bg);
+  /* 允许调试时棋子完全超出显示 */
+  overflow: visible;
 }
 
 /* =========================================
@@ -615,6 +1096,8 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--gap-md);
   min-width: 320px;
+  /* 允许棋子超出游戏区域边界 */
+  overflow: visible;
 }
 
 /* 玩家指示器（顶部/底部） */
@@ -722,16 +1205,44 @@ onUnmounted(() => {
    棋盘
    ========================================= */
 .chess-board-wrapper {
+  position: relative;
   display: flex;
   justify-content: center;
   width: 100%;
-  overflow: auto;
-  padding: 0.25rem;
+  overflow: visible;
+  /* 为超出的棋子预留足够空间 */
+  padding: 120px 0.25rem;
 }
 
-.chess-board {
+/* 棋盘背景层 - 最底层，只显示格子 */
+.chess-board-background {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
   border: 1px solid #e8ebf1;
+  position: relative;
+  z-index: 1;
+}
+
+/* 棋子浮动层 - 上层，完全独立显示 */
+.chess-pieces-layer {
+  position: absolute;
+  top: 120px; /* 对应wrapper的padding-top */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  pointer-events: none; /* 让点击事件穿透 */
+  /* 与棋盘背景完全对齐 */
+  margin: 10px; /* 对应棋盘的padding */
+  border: 1px solid transparent; /* 对应棋盘的border，但透明 */
+}
+
+.pieces-row {
+  position: relative;
+}
+
+.pieces-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .board-row {
@@ -747,6 +1258,8 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   user-select: none;
+  /* 允许棋子超出格子边界 */
+  overflow: visible;
 }
 
 /* 交错底色（棋盘格） */
@@ -806,6 +1319,10 @@ onUnmounted(() => {
   height: 100%;
   display: grid;
   place-items: center;
+  /* 完全允许棋子超出 */
+  overflow: visible;
+  /* 为浮动层重新启用指针事件 */
+  pointer-events: auto;
 }
 
 /* 棋子包装（柔和发光背景） */
@@ -819,6 +1336,10 @@ onUnmounted(() => {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.6) 70%, transparent 100%);
   border: 1px solid rgba(0, 0, 0, 0.03);
+  /* 确保可以完全超出边界 */
+  overflow: visible;
+  /* 为棋子重新启用指针事件 */
+  pointer-events: auto;
 }
 
 .piece-wrapper.player1-wrapper {
@@ -850,6 +1371,10 @@ onUnmounted(() => {
   image-rendering: crisp-edges;
   border-radius: 10px;
   will-change: transform, filter;
+  /* 确保SVG可以完全超出显示 */
+  overflow: visible;
+  /* 使用transform-origin确保缩放和偏移从中心开始 */
+  transform-origin: center center;
 }
 
 .piece-svg.player1 {
@@ -1176,6 +1701,399 @@ onUnmounted(() => {
   .btn-rotate .rotate-icon {
     transition: none !important;
     animation: none !important;
+  }
+}
+
+/* =========================================
+   调试面板样式
+   ========================================= */
+.debug-panel {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 420px;
+  max-width: calc(100vw - 40px);
+  background: var(--panel-bg, #ffffff);
+  border: 2px solid var(--color-border, #e2e8f0);
+  border-radius: 12px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  font-size: 14px;
+  max-height: calc(100vh - 40px);
+  overflow: hidden;
+}
+
+.debug-header {
+  padding: 16px 20px;
+  background: linear-gradient(135deg, var(--p1, #1e88e5) 0%, var(--p1-strong, #1565c0) 100%);
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: bold;
+  border-radius: 10px 10px 0 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.debug-close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  font-weight: bold;
+}
+
+.debug-close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.debug-content {
+  padding: 20px;
+  max-height: calc(100vh - 160px);
+  overflow-y: auto;
+}
+
+.debug-shape-control {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: var(--bg, #f7f8fa);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.debug-shape-control:last-child {
+  margin-bottom: 0;
+}
+
+.debug-shape-control h4 {
+  margin: 0 0 16px 0;
+  color: var(--p1, #1e88e5);
+  font-size: 18px;
+  font-weight: bold;
+  padding: 8px 12px;
+  background: rgba(30, 136, 229, 0.1);
+  border-radius: 6px;
+  border-left: 4px solid var(--p1, #1e88e5);
+}
+
+.debug-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.debug-controls label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  color: var(--text, #333);
+  min-height: 40px;
+}
+
+.debug-controls input[type="range"] {
+  flex: 1;
+  margin: 0;
+  height: 8px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #e2e8f0;
+  border-radius: 4px;
+  outline: none;
+}
+
+.debug-controls input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: var(--p1, #1e88e5);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.debug-controls input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: var(--p1, #1e88e5);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.debug-value {
+  min-width: 70px;
+  text-align: right;
+  font-weight: bold;
+  color: var(--p1, #1e88e5);
+  background: rgba(30, 136, 229, 0.1);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-family: 'Courier New', monospace;
+  border: 1px solid rgba(30, 136, 229, 0.2);
+}
+
+.control-label {
+  flex: 0 0 auto;
+  min-width: 140px;
+  font-weight: 600;
+  color: var(--text, #333);
+}
+
+.control-label small {
+  color: #666;
+  font-weight: normal;
+  font-size: 11px;
+}
+
+.control-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(30, 136, 229, 0.1);
+}
+
+.btn-reset {
+  align-self: flex-start;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #6b7280, #4b5563);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: bold;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(107, 114, 128, 0.3);
+}
+
+.btn-reset:hover {
+  background: linear-gradient(135deg, #4b5563, #374151);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(107, 114, 128, 0.4);
+}
+
+.debug-global-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 8px;
+  border: 1px solid var(--color-border, #e2e8f0);
+}
+
+.btn-reset-all {
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: bold;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+}
+
+.btn-reset-all:hover {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.4);
+}
+
+.btn-export, .btn-import {
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: bold;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.btn-export:hover, .btn-import:hover {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4);
+}
+
+.debug-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 999;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, var(--p1, #1e88e5), var(--p1-strong, #1565c0));
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s;
+}
+
+.debug-toggle:hover {
+  background: linear-gradient(135deg, var(--p1-strong, #1565c0), #1976d2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* =========================================
+   选中指示器和预览效果
+   ========================================= */
+.selection-indicator {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  border: 3px solid #ffd700;
+  border-radius: 50%;
+  animation: pulse-selection 1.5s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 20;
+}
+
+@keyframes pulse-selection {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+.piece-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.piece-preview-img {
+  opacity: 0.5 !important;
+  filter: brightness(1.2);
+  animation: fade-in-preview 0.2s ease-in-out;
+}
+
+@keyframes fade-in-preview {
+  0% {
+    opacity: 0 !important;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 0.5 !important;
+    transform: scale(1);
+  }
+}
+
+/* 改善当前回合玩家的棋子高亮效果 */
+.current-turn-highlight {
+  animation: current-player-glow 2s ease-in-out infinite;
+}
+
+@keyframes current-player-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(59, 130, 246, 0.8);
+  }
+}
+
+.piece-wrapper.player2-wrapper.current-turn-highlight {
+  animation: current-player-glow-red 2s ease-in-out infinite;
+}
+
+@keyframes current-player-glow-red {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.8);
+  }
+}
+
+.active-turn-piece {
+  filter: brightness(1.2) saturate(1.3);
+}
+
+/* 调试面板滚动条样式 */
+.debug-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.debug-content::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.debug-content::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, var(--p1, #1e88e5), var(--p1-strong, #1565c0));
+  border-radius: 4px;
+}
+
+.debug-content::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, var(--p1-strong, #1565c0), #1976d2);
+}
+
+/* 响应式调试面板 */
+@media (max-width: 768px) {
+  .debug-panel {
+    width: calc(100vw - 20px);
+    right: 10px;
+    top: 10px;
+    max-height: calc(100vh - 20px);
+  }
+  
+  .debug-toggle {
+    right: 10px;
+  }
+  
+  .debug-global-controls {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .debug-controls label {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    min-height: auto;
+  }
+  
+  .debug-value {
+    text-align: center;
+  }
+}
+
+/* 为了避免调试面板遮挡规则面板，在大屏幕上调整规则面板宽度 */
+@media (min-width: 1400px) {
+  .rules-panel {
+    margin-right: 460px; /* 为调试面板留出空间 */
   }
 }
 </style>
