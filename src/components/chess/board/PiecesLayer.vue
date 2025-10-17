@@ -11,6 +11,8 @@
         class="pieces-cell"
         :style="getPieceCellPosition(rowIndex, colIndex)"
         @click="handleEmptyCellClick(cell)"
+        @mouseenter="handleCellHover(cell)"
+        @mouseleave="handleCellLeave(cell)"
       >
         <!-- 渲染棋子 -->
         <div v-if="cell.pieces.length > 0" class="pieces-stack">
@@ -19,6 +21,7 @@
             :key="piece.id"
             :piece="piece"
             :is-selected="isSelectedPiece(piece)"
+            :can-move="canPieceMove(piece)"
             :get-piece-svg="getPieceSvg"
             :get-piece-class="getPieceClass"
             :get-piece-wrapper-class="getPieceWrapperClass"
@@ -39,6 +42,7 @@ import type { BoardCell, ChessPiece as ChessPieceType } from '@/types/chess'
 interface Props {
   boardCells: BoardCell[][]
   isSelectedPiece: (piece: ChessPieceType) => boolean
+  canPieceMove: (piece: ChessPieceType) => boolean
   getPieceCellPosition: (rowIndex: number, colIndex: number) => Record<string, string>
   getPieceSvg: (piece: ChessPieceType) => string
   getPieceClass: (piece: ChessPieceType) => string[]
@@ -46,6 +50,8 @@ interface Props {
   getPieceStyle: (piece: ChessPieceType) => Record<string, string>
   handlePieceClick: (piece: ChessPieceType) => void
   handleEmptyCellClick: (cell: BoardCell) => void
+  handleCellHover: (cell: BoardCell) => void
+  handleCellLeave: (cell: BoardCell) => void
 }
 
 defineProps<Props>()

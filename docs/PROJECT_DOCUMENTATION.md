@@ -1,10 +1,8 @@
 # 拼图棋盘游戏 - 完整项目文档
 
-文档已过期,需要重新修订文档.
-
-> **版本**: v1.0  
+> **版本**: v1.1  
 > **更新日期**: 2025-10-17  
-> **状态**: ✅ MVP 完成，可玩测试版
+> **状态**: ✅ MVP 完成，模块化架构重构完成
 
 ---
 
@@ -29,12 +27,20 @@
 
 ### 技术栈
 
-- **框架**: Vue 3 + TypeScript
+- **框架**: Vue 3 + TypeScript (Composition API)
 - **构建工具**: Vite 6.0.3
 - **路由**: Vue Router 4.5.0
-- **状态管理**: 无需 Pinia（使用 OOP 类管理状态）
+- **状态管理**: OOP 类管理（无需 Pinia）
 - **测试**: Vitest
 - **开发环境**: VS Code + Node.js 18+
+
+### 项目架构特点
+
+- **模块化组件**: ChessBoard 拆分为 12+ 个子组件
+- **Composables 模式**: 3 个核心 composable 函数
+- **OOP 游戏引擎**: 纯 TypeScript 类管理游戏逻辑
+- **层级分离**: 棋盘背景层 + 棋子浮动层
+- **页面级工具**: 调试面板在页面层管理
 
 ### 项目结构
 
@@ -56,16 +62,47 @@ src/
 ├── constants/
 │   └── chess/                 # 棋盘配置 ✅
 │       ├── pieces.ts          # 棋子定义
-│       └── board.ts           # 棋盘常量
+│       └── board.ts           # 棋盘常量（玩家起始位置）
 ├── components/
 │   ├── PuzzleBoard.vue        # 简单拼图
-│   └── chess/                 # 棋盘游戏 UI ✅
-│       └── ChessBoard.vue
+│   └── chess/                 # 棋盘游戏 UI（模块化架构）✅
+│       ├── ChessBoardNew.vue  # 主容器（新架构）✅
+│       ├── ChessBoard.vue     # 旧版本（2100+行，已废弃）
+│       ├── composables/       # 组合式函数 ✅
+│       │   ├── useGameState.ts          # 游戏状态管理
+│       │   ├── useDebugSettings.ts      # 调试设置
+│       │   └── usePieceInteraction.ts   # 棋子交互逻辑
+│       ├── board/             # 棋盘组件 ✅
+│       │   ├── BoardBackground.vue      # 棋盘背景层
+│       │   ├── PiecesLayer.vue          # 棋子浮动层
+│       │   └── ChessPiece.vue           # 单个棋子组件
+│       ├── ui/                # UI 组件 ✅
+│       │   ├── PlayerIndicator.vue      # 玩家指示器（游戏风格）
+│       │   └── GameStatus.vue           # 游戏状态显示
+│       └── panels/            # 面板组件 ✅
+│           ├── GameControlPanel.vue     # 游戏控制面板
+│           ├── DebugPanel.vue           # 调试面板
+│           └── RulesPanel.vue           # 规则面板
 ├── views/
-│   └── ChessView.vue          # 棋盘游戏视图（首页）✅
+│   └── ChessView.vue          # 棋盘游戏视图（首页，含页面级调试面板）✅
 └── router/
     └── index.ts               # 路由配置（首页=棋盘）✅
+
+docs/
+├── PROJECT_DOCUMENTATION.md   ⭐ 完整项目文档（本文档）
+├── TODO.md                    📝 待办事项清单
+├── COMPONENT_REFACTORING.md   📐 组件重构文档
+└── DEBUG_PANEL_ARCHITECTURE.md 🛠️ 调试面板架构说明
 ```
+
+### 模块化架构说明
+
+**v1.1 重构**（2025-10-17）:
+- ✅ 将 2100+ 行的 ChessBoard.vue 拆分为 12+ 个模块
+- ✅ 使用 Composables 模式管理逻辑复用
+- ✅ 分离棋盘背景层和棋子浮动层（解决 DOM 干扰问题）
+- ✅ 调试面板移至页面级别（ChessView.vue）
+- ✅ 每个组件职责单一，易于维护和测试
 
 ---
 
@@ -76,9 +113,11 @@ src/
 - **棋盘**: 4×4 网格（16 个格子）
 - **棋子**: 每方 4 个拼图形状棋子
 - **起始位置**:
-  - 玩家 1（蓝色）：第 0 行（顶部）
-  - 玩家 2（红色）：第 3 行（底部）
+  - 玩家 1（蓝色）：第 3 行（底部）
+  - 玩家 2（红色）：第 0 行（顶部）
 - **目标**: 将己方所有棋子移至对方起始行
+  - 玩家 1 目标：到达第 0 行（顶部）↑
+  - 玩家 2 目标：到达第 3 行（底部）↓
 - **胜利条件**: 率先完成目标的玩家获胜
 
 ### ♟️ 核心规则
@@ -150,8 +189,9 @@ src/
 
 ### 设计模式
 
-项目采用 **面向对象编程（OOP）** 范式，核心游戏逻辑封装在类中：
+项目采用 **面向对象编程（OOP）** + **组合式函数（Composables）** 混合架构：
 
+**游戏逻辑层（OOP）**:
 ```typescript
 // 游戏引擎 - 管理游戏状态
 class GameEngine {
@@ -184,6 +224,199 @@ class PieceManager {
   static createInitialPieces(player, startRows): ChessPiece[] { }
 }
 ```
+
+**UI 逻辑层（Composables）**:
+```typescript
+// useGameState.ts - 游戏状态管理
+export function useGameState() {
+  const gameEngine = ref<GameEngine | null>(null)
+  const selectedCell = ref<ChessPiece | null>(null)
+  const currentPlayer = computed(() => gameEngine.value?.gameState.currentPlayer)
+  
+  function executeMove(piece, to, rotation?) { }
+  function rotatePiece() { }
+  function undoMove() { }
+  function resetGame() { }
+  
+  return { gameEngine, selectedCell, currentPlayer, ... }
+}
+
+// useDebugSettings.ts - 调试设置（localStorage 持久化）
+export function useDebugSettings() {
+  const showDebug = ref(false)
+  const debugSettings = reactive({ ... })
+  
+  function toggleDebugPanel() { }
+  function resetAllDebugSettings() { }
+  function exportDebugSettings() { }
+  
+  return { showDebug, debugSettings, ... }
+}
+
+// usePieceInteraction.ts - 棋子交互逻辑
+export function usePieceInteraction(gameState, debugState) {
+  function handlePieceClick(piece) { }
+  function handleEmptyCellClick(cell) { }
+  function getPieceCellPosition(piece) { }  // 含 padding 修正
+  function getPieceStyle(piece) { }
+  
+  return { handlePieceClick, getPieceCellPosition, ... }
+}
+```
+
+### 组件架构
+
+**ChessBoardNew.vue（主容器）**:
+- 组合 3 个 composables
+- 协调子组件通信
+- 管理键盘事件
+- 使用 `defineExpose` 导出状态供页面访问
+
+**子组件分类**:
+
+1. **棋盘组件**（board/）:
+   - `BoardBackground.vue`: 背景格子层（Grid 布局）
+   - `PiecesLayer.vue`: 棋子浮动层（绝对定位）
+   - `ChessPiece.vue`: 单个棋子（SVG + 点击事件）
+
+2. **UI 组件**（ui/）:
+   - `PlayerIndicator.vue`: 玩家指示器（游戏风格设计）
+     - 圆形头像 + 发光效果
+     - 回合徽章 + 脉冲动画
+     - 目标显示（↑/↓）
+   - `GameStatus.vue`: 游戏状态（获胜提示 + 键盘提示）
+
+3. **面板组件**（panels/）:
+   - `GameControlPanel.vue`: 游戏控制（旋转/跳过/悔棋/重置）
+   - `DebugPanel.vue`: 调试面板（棋子缩放/偏移调整）
+   - `RulesPanel.vue`: 规则面板（浮动显示）
+
+### 关键架构决策
+
+**1. 层级分离**（解决 DOM 干扰）:
+```vue
+<div class="chess-board-wrapper">
+  <!-- 背景层：Grid 布局 -->
+  <BoardBackground :board-cells="boardCells" />
+  
+  <!-- 棋子层：绝对定位浮动层 -->
+  <PiecesLayer :board-cells="boardCells" />
+</div>
+```
+
+**2. 点击事件优化**:
+- ❌ 旧版：棋盘格子绑定点击事件（事件冲突）
+- ✅ 新版：直接在棋子和空格子上绑定（事件清晰）
+
+**3. 位置计算修正**:
+```typescript
+// usePieceInteraction.ts
+function getPieceCellPosition(piece: ChessPiece) {
+  const { cellSize, gap, padding } = BOARD_DISPLAY
+  return {
+    left: colIndex * (cellSize + gap) + padding,  // 修正 10px padding
+    top: rowIndex * (cellSize + gap) + padding
+  }
+}
+```
+
+**4. 调试面板架构**:
+- **旧版**: 在 ChessBoardNew.vue 内部
+- **新版**: 移至 ChessView.vue 页面级别
+- **优点**: 组件职责单一，开发工具与游戏逻辑分离
+- **实现**: 使用 `defineExpose` 导出 `debugState` 供父组件访问
+
+---
+
+## 代码结构
+
+### Composables 详解
+
+#### 1. useGameState（游戏状态管理）
+
+**职责**: 封装游戏引擎交互逻辑
+
+**核心状态**:
+```typescript
+const gameEngine = ref<GameEngine | null>(null)
+const selectedCell = ref<ChessPiece | null>(null)
+const boardCells = computed(() => gameEngine.value?.gameState.board || [])
+const currentPlayer = computed(() => gameEngine.value?.gameState.currentPlayer || 1)
+const winner = computed(() => gameEngine.value?.gameState.winner)
+const moveHistory = computed(() => gameEngine.value?.gameState.moveHistory || [])
+```
+
+**核心方法**:
+- `initializeGame(engine)`: 初始化游戏引擎
+- `executeMove(piece, to, rotation?)`: 执行移动
+- `rotatePiece()`: 旋转选中棋子（仅鸟类原地旋转）
+- `skipTurn()`: 跳过回合
+- `undoMove()`: 悔棋
+- `resetGame()`: 重置游戏
+- `clearSelection()`: 清除选择
+
+#### 2. useDebugSettings（调试设置）
+
+**职责**: 管理调试面板状态和 localStorage 持久化
+
+**核心状态**:
+```typescript
+const showDebug = ref(false)
+const debugSettings = reactive({
+  resource1: { scale: 1, offsetX: 0, offsetY: 0 },
+  resource2: { scale: 1, offsetX: 0, offsetY: 0 },
+  resource3: { scale: 1, offsetX: 0, offsetY: 0 },
+  resource4: { scale: 1, offsetX: 0, offsetY: 0 }
+})
+```
+
+**核心方法**:
+- `toggleDebugPanel()`: 切换调试面板
+- `resetAllDebugSettings()`: 重置所有设置
+- `resetShape(shapeId)`: 重置指定棋子设置
+- `updateShapeSettings(shapeId, settings)`: 更新棋子设置
+- `exportDebugSettings()`: 导出设置（JSON）
+- `importDebugSettings(json)`: 导入设置
+
+#### 3. usePieceInteraction（棋子交互）
+
+**职责**: 管理棋子点击、移动提示、样式计算
+
+**核心方法**:
+```typescript
+// 点击事件
+function handlePieceClick(piece: ChessPiece) {
+  // 选中/取消选中己方棋子
+}
+
+function handleEmptyCellClick(cell: BoardCell) {
+  // 移动选中棋子到空格子
+}
+
+// 位置和样式计算
+function getPieceCellPosition(piece: ChessPiece) {
+  // 计算棋子在棋盘上的绝对位置（含 padding 修正）
+}
+
+function getPieceStyle(piece: ChessPiece) {
+  // 应用调试设置（缩放 + 偏移）
+}
+
+function getPieceSvg(piece: ChessPiece) {
+  // 返回 SVG 路径
+}
+
+// 移动提示
+function getCellClass(cell: BoardCell) {
+  // 返回格子 CSS 类（selected/possible-move）
+}
+
+function shouldShowPiecePreview(cell: BoardCell) {
+  // 是否显示棋子预览（悬停在可移动位置）
+}
+```
+
+### 组件详解
 
 ### 核心类型定义
 
@@ -654,7 +887,38 @@ describe('EdgeMatcher', () => {
 
 ## 版本历史
 
-### v1.0 - 简化版本（当前）- 2025-10-17
+### v1.1 - 模块化重构（当前）- 2025-10-17
+
+**架构重构**:
+- ✅ 拆分 ChessBoard.vue（2100+ 行 → 12+ 个模块）
+- ✅ 创建 3 个 Composables（useGameState, useDebugSettings, usePieceInteraction）
+- ✅ 分离棋盘背景层和棋子浮动层（解决 DOM 干扰）
+- ✅ 调试面板移至页面级别（ChessView.vue）
+- ✅ 使用 defineExpose 实现父子组件通信
+
+**玩家位置修正**:
+- ✅ 玩家 1：起始第 3 行（底部）→ 目标第 0 行（顶部）↑
+- ✅ 玩家 2：起始第 0 行（顶部）→ 目标第 3 行（底部）↓
+
+**UI 优化**:
+- ✅ 重新设计 PlayerIndicator 为游戏风格
+  - 圆形头像 + 用户图标
+  - 发光效果 + 脉冲动画
+  - 回合徽章（"回合中"）
+  - 动态边框发光
+  - 目标显示（↑/↓箭头）
+- ✅ 修复 CSS 变量作用域问题（棋盘格子显示）
+- ✅ 修复棋子位置计算偏移（10px padding 修正）
+- ✅ 点击事件从棋盘移至棋子（避免事件冲突）
+
+**文档更新**:
+- ✅ 更新 PROJECT_DOCUMENTATION.md（反映新架构）
+- ✅ 创建 COMPONENT_REFACTORING.md（重构说明）
+- ✅ 创建 DEBUG_PANEL_ARCHITECTURE.md（架构说明）
+
+---
+
+### v1.0 - 简化版本 - 2025-10-17
 
 **核心机制**:
 - ✅ 一回合一动作（移动或旋转）
@@ -718,8 +982,23 @@ describe('EdgeMatcher', () => {
 
 ### 常见问题 FAQ
 
+**Q: 为什么要进行模块化重构？**  
+A: 原 ChessBoard.vue 超过 2100 行，难以维护。重构后拆分为 12+ 个模块，每个组件职责单一，使用 Composables 复用逻辑，大大提高了代码可维护性和可测试性。
+
 **Q: 为什么没有使用 Pinia 状态管理？**  
-A: 游戏逻辑采用 OOP 设计，GameEngine 类封装了所有状态，无需额外的状态管理库。
+A: 游戏逻辑采用 OOP 设计，GameEngine 类封装了所有状态。UI 层使用 Composables 管理响应式状态，无需额外的全局状态管理库。
+
+**Q: Composables 和 Classes 如何协同工作？**  
+A: Classes（GameEngine, MoveValidator）负责纯游戏逻辑，Composables（useGameState）负责将逻辑封装为 Vue 响应式状态，并提供给组件使用。这种混合架构兼顾了逻辑封装和响应式更新。
+
+**Q: 为什么将调试面板移至页面级别？**  
+A: 调试面板是开发工具，不属于游戏核心功能。移至 ChessView.vue 后，ChessBoardNew.vue 职责更单一，符合单一职责原则。通过 defineExpose 导出 debugState，父组件仍可访问。
+
+**Q: 如何解决棋子位置偏移问题？**  
+A: 在 `usePieceInteraction.ts` 的 `getPieceCellPosition` 函数中，添加了 10px 的 padding 偏移修正：
+```typescript
+left: colIndex * (cellSize + gap) + padding  // padding = 10px
+```
 
 **Q: 边缘匹配功能什么时候启用？**  
 A: 当前版本为自由模式，边缘匹配已实现但未启用。未来版本可能会添加为高级模式。
@@ -728,10 +1007,13 @@ A: 当前版本为自由模式，边缘匹配已实现但未启用。未来版�
 A: 在 `constants/chess/pieces.ts` 中定义新的 `PIECE_DEFINITIONS`，然后在 `PieceManager` 中处理创建逻辑。
 
 **Q: 如何修改棋盘大小？**  
-A: 修改 `constants/chess/board.ts` 中的 `BOARD_SIZE` 常量，并调整起始行配置。
+A: 修改 `constants/chess/board.ts` 中的 `BOARD_SIZE` 常量，并调整起始行配置（PLAYER1_START_ROWS, PLAYER2_START_ROWS）。
 
 **Q: 测试覆盖率如何？**  
-A: 当前仅有 EdgeMatcher 的单元测试，建议添加更多测试覆盖核心逻辑。
+A: 当前仅有 EdgeMatcher 的单元测试，建议添加更多测试覆盖核心逻辑（GameEngine, MoveValidator, Composables）。
+
+**Q: 如何调试组件通信问题？**  
+A: 使用 Vue DevTools 查看组件树和 props 传递。在 Composables 中添加 `console.log` 跟踪状态变化。启用调试面板（按 D 键）查看实时游戏状态。
 
 ### 术语表
 
@@ -754,13 +1036,22 @@ A: 当前仅有 EdgeMatcher 的单元测试，建议添加更多测试覆盖核�
 - **TypeScript 官方文档**: https://www.typescriptlang.org/
 - **Vite 官方文档**: https://cn.vitejs.dev/
 - **Vitest 官方文档**: https://cn.vitest.dev/
+- **Vue 3 Composition API**: https://cn.vuejs.org/guide/extras/composition-api-faq.html
+
+### 相关文档
+
+- [完整项目文档](./PROJECT_DOCUMENTATION.md) - 本文档
+- [待办事项清单](./TODO.md) - 开发进度跟踪
+- [组件重构文档](./COMPONENT_REFACTORING.md) - 重构详细说明
+- [调试面板架构](./DEBUG_PANEL_ARCHITECTURE.md) - 调试工具设计
 
 ---
 
 **项目维护者**: [Your Name]  
 **许可证**: MIT  
-**最后更新**: 2025-10-17
+**最后更新**: 2025-10-17  
+**版本**: v1.1（模块化重构版本）
 
 ---
 
-> 📝 **文档说明**: 本文档整合了项目的所有核心信息，包括游戏规则、技术架构、开发指南、API 文档等。如有疑问，请参考源代码或联系项目维护者。
+> 📝 **文档说明**: 本文档整合了项目的所有核心信息，包括游戏规则、技术架构、组件设计、开发指南、API 文档等。v1.1 版本完成了重大架构重构，将单一的 2100+ 行组件拆分为模块化架构，大幅提升了代码质量和可维护性。如有疑问，请参考源代码或相关文档。

@@ -130,7 +130,8 @@ export function usePieceInteraction(gameState: any, debugSettings: any) {
     const topPiece = cell.pieces[cell.pieces.length - 1]
     return {
       transform: `rotate(${topPiece.rotation}deg)`,
-      opacity: '0.5'  // 半透明预览效果
+      opacity: '0.4',  // 半透明虚影效果
+      filter: 'brightness(1.2) drop-shadow(0 0 8px rgba(255, 255, 255, 0.8))'  // 发光虚影
     }
   }
 
@@ -200,6 +201,29 @@ export function usePieceInteraction(gameState: any, debugSettings: any) {
   }
 
   /**
+   * 判断棋子是否可移动
+   */
+  function canPieceMove(piece: ChessPiece): boolean {
+    // 只有当前玩家的棋子才可移动
+    if (piece.player !== gameState.currentPlayer.value) {
+      return false
+    }
+
+    // 游戏结束时不可移动
+    if (gameState.winner.value) {
+      return false
+    }
+
+    // 检查是否有可能的移动
+    if (!gameState.gameEngine.value) {
+      return false
+    }
+
+    const moves = gameState.gameEngine.value.getPossibleMovesForPiece(piece)
+    return moves.length > 0
+  }
+
+  /**
    * 处理空位点击
    */
   function handleEmptyCellClick(cell: BoardCell) {
@@ -257,6 +281,9 @@ export function usePieceInteraction(gameState: any, debugSettings: any) {
     // 格子相关
     getCellClass,
     cellTooltip,
+    
+    // 棋子状态
+    canPieceMove,
     
     // 事件处理
     handleCellHover,

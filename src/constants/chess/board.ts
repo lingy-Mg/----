@@ -16,14 +16,14 @@ export const BOARD_SIZE = 4
 export const PIECES_PER_PLAYER = 4
 
 /**
- * Player 1 start zone rows (top 1 row)
+ * Player 1 start zone rows (bottom 1 row)
  */
-export const PLAYER1_START_ROWS = [0]
+export const PLAYER1_START_ROWS = [3]
 
 /**
- * Player 2 start zone rows (bottom 1 row)
+ * Player 2 start zone rows (top 1 row)
  */
-export const PLAYER2_START_ROWS = [3]
+export const PLAYER2_START_ROWS = [0]
 
 /**
  * Player 1 finish zone rows (opponent's start = Player 2's start)

@@ -3,11 +3,19 @@
     <div class="game-content">
       <!-- 左侧：游戏主区域 -->
       <div class="game-main">
-        <!-- 玩家指示器 -->
-        <PlayerIndicator :current-player="currentPlayer" />
+        <!-- 玩家2指示器（顶部） -->
+        <PlayerIndicator 
+          :current-player="currentPlayer" 
+          :player-number="2"
+          :stats="player2Stats"
+          :can-undo="canUndo"
+          :is-game-over="!!winner"
+          @undo="handleUndo"
+          @skip="handlePass"
+        />
 
         <!-- 棋盘容器 -->
-        <div class="chess-board-wrapper">
+        <div class="chess-board-wrapper" :class="getBoardGlowClass()">
           <!-- 棋盘背景层 -->
           <BoardBackground
             :board-cells="boardCells"
@@ -24,6 +32,7 @@
           <PiecesLayer
             :board-cells="boardCells"
             :is-selected-piece="gameState.isSelectedPiece"
+            :can-piece-move="interaction.canPieceMove"
             :get-piece-cell-position="interaction.getPieceCellPosition"
             :get-piece-svg="interaction.getPieceSvg"
             :get-piece-class="interaction.getPieceClass"
@@ -31,8 +40,21 @@
             :get-piece-style="interaction.getPieceStyle"
             :handle-piece-click="interaction.handlePieceClick"
             :handle-empty-cell-click="interaction.handleEmptyCellClick"
+            :handle-cell-hover="interaction.handleCellHover"
+            :handle-cell-leave="interaction.handleCellLeave"
           />
         </div>
+
+        <!-- 玩家1指示器（底部） -->
+        <PlayerIndicator 
+          :current-player="currentPlayer" 
+          :player-number="1"
+          :stats="player1Stats"
+          :can-undo="canUndo"
+          :is-game-over="!!winner"
+          @undo="handleUndo"
+          @skip="handlePass"
+        />
 
         <!-- 游戏状态显示 -->
         <GameStatus :winner="winner" :move-history="moveHistory" />
@@ -85,14 +107,17 @@ const interaction = usePieceInteraction(gameState, debugState)
 // ===== 本地状态 =====
 const showRules = ref(false)
 
-// ===== 从 gameState 解构 =====
+// ===== 从 gameState 获取响应式引用（不解构计算属性） =====
 const {
   gameEngine,
   selectedCell,
   boardCells,
   currentPlayer,
   winner,
-  moveHistory
+  moveHistory,
+  player1Stats,
+  player2Stats,
+  canUndo
 } = gameState
 
 // ===== 初始化 =====
@@ -109,6 +134,12 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyPress)
 })
+
+// ===== UI 辅助方法 =====
+function getBoardGlowClass() {
+  if (winner.value) return '' // 游戏结束时不显示发光
+  return currentPlayer.value === 1 ? 'board-glow-player-1' : 'board-glow-player-2'
+}
 
 // ===== 游戏控制方法 =====
 function handleRotate() {
@@ -182,6 +213,9 @@ defineExpose({
   position: relative;
   width: fit-content;
   margin: 0 auto;
+  padding: 8px;
+  border-radius: 16px;
+  transition: all 0.4s ease;
 }
 
 .game-sidebar {

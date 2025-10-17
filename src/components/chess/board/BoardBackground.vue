@@ -11,6 +11,7 @@
         class="board-cell"
         :class="[
           getCellClass(cell),
+          getStartZoneClass(cell),
           (rowIndex + colIndex) % 2 === 1 ? 'board-cell--dark' : 'board-cell--light'
         ]"
         @mouseenter="handleCellHover(cell)"
@@ -66,6 +67,20 @@ const boardStyle = computed(() => {
     borderRadius: '12px'
   }
 })
+
+// ===== 方法 =====
+/**
+ * 获取起始区域的样式类
+ */
+function getStartZoneClass(cell: BoardCell): string {
+  if (cell.isStartZone.player1) {
+    return 'start-zone-player1' // 玩家1起始区（底部，红色）
+  }
+  if (cell.isStartZone.player2) {
+    return 'start-zone-player2' // 玩家2起始区（顶部，蓝色）
+  }
+  return ''
+}
 </script>
 
 <style scoped>
@@ -97,6 +112,28 @@ const boardStyle = computed(() => {
   background: var(--cell-bg-light);
 }
 
+/* 玩家1起始区（底部，红色背景） */
+.board-cell.start-zone-player1 {
+  background: #ff4444 !important;
+  border-color: rgba(244, 67, 54, 0.6);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.board-cell.start-zone-player1.board-cell--dark {
+  background: #ff4444 !important;
+}
+
+/* 玩家2起始区（顶部，蓝色背景） */
+.board-cell.start-zone-player2 {
+  background: #4488ff !important;
+  border-color: rgba(33, 150, 243, 0.6);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.board-cell.start-zone-player2.board-cell--dark {
+  background: #4488ff !important;
+}
+
 .board-cell.selected {
   background: var(--cell-selected) !important;
   box-shadow: 0 0 0 3px var(--primary-color);
@@ -122,6 +159,11 @@ const boardStyle = computed(() => {
   z-index: 1;
 }
 
+/* 有虚影预览时，隐藏绿色圆点 */
+.board-cell.possible-move:has(.piece-preview)::before {
+  opacity: 0;
+}
+
 /* 棋子预览样式 */
 .piece-preview {
   position: absolute;
@@ -133,13 +175,27 @@ const boardStyle = computed(() => {
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  z-index: 2;
+  z-index: 3;
+  animation: ghostPulse 1.5s ease-in-out infinite;
 }
 
 .piece-preview-img {
   max-width: 90%;
   max-height: 90%;
   object-fit: contain;
+  filter: brightness(1.2) drop-shadow(0 0 10px rgba(255, 255, 255, 0.9));
+}
+
+/* 虚影脉冲动画 */
+@keyframes ghostPulse {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.05);
+  }
 }
 </style>
 

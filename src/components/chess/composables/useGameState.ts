@@ -1,6 +1,6 @@
 import { ref, computed, reactive } from 'vue'
 import type { GameEngine } from '@/classes/chess/GameEngine'
-import type { ChessPiece, Position, Move } from '@/types/chess'
+import type { ChessPiece, Position, Move, PlayerStats } from '@/types/chess'
 
 /**
  * 游戏状态管理组合式函数
@@ -27,6 +27,28 @@ export function useGameState() {
 
   const moveHistory = computed(() => {
     return gameEngine.value?.getGameState().moveHistory || []
+  })
+
+  const player1Stats = computed((): PlayerStats => {
+    return gameEngine.value?.getGameState().player1Stats || {
+      totalMoves: 0,
+      totalUndos: 0,
+      consecutiveUndos: 0,
+      totalPasses: 0
+    }
+  })
+
+  const player2Stats = computed((): PlayerStats => {
+    return gameEngine.value?.getGameState().player2Stats || {
+      totalMoves: 0,
+      totalUndos: 0,
+      consecutiveUndos: 0,
+      totalPasses: 0
+    }
+  })
+
+  const canUndo = computed(() => {
+    return (gameEngine.value?.getGameState().moveHistory.length || 0) > 0
   })
 
   // ===== 游戏操作方法 =====
@@ -122,7 +144,7 @@ export function useGameState() {
    */
   function skipTurn() {
     if (gameEngine.value) {
-      gameEngine.value.switchTurn()
+      gameEngine.value.pass()
       clearSelection()
     }
   }
@@ -183,6 +205,9 @@ export function useGameState() {
     currentPlayer,
     winner,
     moveHistory,
+    player1Stats,
+    player2Stats,
+    canUndo,
     
     // 方法
     initializeGame,

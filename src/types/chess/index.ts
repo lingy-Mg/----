@@ -217,6 +217,16 @@ export interface ThreatInfo {
 }
 
 /**
+ * 玩家统计信息
+ */
+export interface PlayerStats {
+  totalMoves: number           // 总移动次数
+  totalUndos: number           // 总悔棋次数
+  consecutiveUndos: number     // 连续悔棋次数
+  totalPasses: number          // 总跳过次数
+}
+
+/**
  * 游戏状态
  */
 export interface GameState {
@@ -230,6 +240,8 @@ export interface GameState {
     player1: number
     player2: number
   }
+  player1Stats: PlayerStats     // 玩家1统计
+  player2Stats: PlayerStats     // 玩家2统计
   winner: Player | null         // 获胜者
   threatInfo: ThreatInfo | null // 威胁信息（未使用）
   turnNumber: number            // 回合数

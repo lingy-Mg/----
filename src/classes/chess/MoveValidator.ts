@@ -230,23 +230,39 @@ export class MoveValidator {
     }
 
     const possibleMoves: Move[] = []
-    const directions = Object.keys(DIRECTION_VECTORS) as Direction[]
     const rotations: Rotation[] = includeRotations ? [0, 90, 180, 270] : [piece.rotation]
+    const boardSize = board.length
 
-    for (const direction of directions) {
-      for (let steps = MIN_MOVE_STEPS; steps <= MAX_MOVE_STEPS; steps++) {
-        const targetPos = this.getPositionInDirection(piece.position, direction, steps)
-
-        // Skip if out of bounds
-        if (!isValidPosition(targetPos, board.length)) {
+    // 遍历棋盘上的每一个位置
+    for (let row = 0; row < boardSize; row++) {
+      for (let col = 0; col < boardSize; col++) {
+        const targetPos: Position = { row, col }
+        
+        // 跳过当前位置
+        if (positionsEqual(targetPos, piece.position)) {
           continue
         }
 
+        // 检查目标位置是否为空
+        const targetCell = board[row][col]
+        if (targetCell.pieces.length > 0) {
+          continue // 目标位置被占用，跳过
+        }
+
+        // 检查是否在直线或对角线上
+        const direction = this.getDirection(piece.position, targetPos)
+        if (!direction) {
+          continue // 不在直线或对角线上，跳过
+        }
+
+        const distance = this.calculateChebyshevDistance(piece.position, targetPos)
+
+        // 对于每个可能的旋转角度
         for (const rotation of rotations) {
           const needsRotation = rotation !== piece.rotation
 
-          // Skip if rotation requires distance limit
-          if (needsRotation && steps > ROTATE_MOVE_LIMIT) {
+          // 如果需要旋转，只能移动1格
+          if (needsRotation && distance > ROTATE_MOVE_LIMIT) {
             continue
           }
 
@@ -257,7 +273,7 @@ export class MoveValidator {
               piece,
               from: piece.position,
               to: targetPos,
-              steps,
+              steps: distance,
               needRotation: needsRotation,
               newRotation: rotation,
               canFit: true,

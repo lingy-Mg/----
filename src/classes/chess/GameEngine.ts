@@ -53,6 +53,18 @@ export class GameEngine {
         player1: 0,
         player2: 0
       },
+      player1Stats: {
+        totalMoves: 0,
+        totalUndos: 0,
+        consecutiveUndos: 0,
+        totalPasses: 0
+      },
+      player2Stats: {
+        totalMoves: 0,
+        totalUndos: 0,
+        consecutiveUndos: 0,
+        totalPasses: 0
+      },
       winner: null,
       threatInfo: null,
       turnNumber: 0,
@@ -61,27 +73,59 @@ export class GameEngine {
   }
 
   /**
-   * Create pieces for a player
+   * Create pieces for a player with specific shapes
+   * 根据图片排列创建棋子：
+   * 玩家1（底部）：橙(4)、绿(3)、蓝(2)、红(1)
+   * 玩家2（顶部）：红(1)、蓝(2)、绿(3)、橙(4)
    */
   private createPlayerPieces(player: Player): ChessPiece[] {
     const pieces: ChessPiece[] = []
     
-    // Create pieces with different shapes (1-4)
+    // 根据玩家设置不同的形状顺序
+    let shapeOrder: number[]
+    if (player === PlayerEnum.PLAYER1) {
+      // 玩家1（底部）：橙色(4)、绿色(3)、蓝色(2)、红色(1)
+      shapeOrder = [4, 3, 2, 1]
+    } else {
+      // 玩家2（顶部）：红色(1)、蓝色(2)、绿色(3)、橙色(4)
+      shapeOrder = [1, 2, 3, 4]
+    }
+    
     for (let i = 0; i < this.config.piecesPerPlayer; i++) {
-      const shapeId = (i % 4) + 1 // Cycle through shapes 1-4
+      const shapeId = shapeOrder[i] || 1
       const piece: ChessPiece = {
         id: generatePieceId(player, shapeId, i),
         player,
         shapeId,
-        rotation: 0,
+        rotation: this.getInitialRotation(player, i),
         position: null,
         isOnBoard: false,
-        isBird: false // Future feature
+        isBird: shapeId === 4 // 橙色（资源4）是鸟类
       }
       pieces.push(piece)
     }
 
     return pieces
+  }
+
+  /**
+   * 获取初始旋转角度
+   * 根据图片中的棋子方向设置
+   */
+  private getInitialRotation(player: Player, index: number): Rotation {
+    // 根据图片观察设置旋转角度
+    // 玩家2（顶部）的旋转
+    if (player === PlayerEnum.PLAYER2) {
+      // 从左到右：红、蓝、绿、橙
+      const rotations: Rotation[] = [0, 0, 0, 0]
+      return rotations[index] || 0
+    }
+    // 玩家1（底部）的旋转
+    else {
+      // 从左到右：橙、绿、蓝、红
+      const rotations: Rotation[] = [180, 180, 180, 180]
+      return rotations[index] || 180
+    }
   }
 
   /**
@@ -165,6 +209,15 @@ export class GameEngine {
       timestamp: Date.now()
     })
 
+    // 更新统计：增加移动次数，重置连续悔棋次数
+    if (this.gameState.currentPlayer === PlayerEnum.PLAYER1) {
+      this.gameState.player1Stats.totalMoves++
+      this.gameState.player1Stats.consecutiveUndos = 0
+    } else {
+      this.gameState.player2Stats.totalMoves++
+      this.gameState.player2Stats.consecutiveUndos = 0
+    }
+
     // Reset pass count for current player
     if (this.gameState.currentPlayer === PlayerEnum.PLAYER1) {
       this.gameState.passCount.player1 = 0
@@ -210,8 +263,12 @@ export class GameEngine {
     // Increment pass count
     if (this.gameState.currentPlayer === PlayerEnum.PLAYER1) {
       this.gameState.passCount.player1++
+      this.gameState.player1Stats.totalPasses++
+      this.gameState.player1Stats.consecutiveUndos = 0  // 跳过回合时重置连续悔棋
     } else {
       this.gameState.passCount.player2++
+      this.gameState.player2Stats.totalPasses++
+      this.gameState.player2Stats.consecutiveUndos = 0  // 跳过回合时重置连续悔棋
     }
 
     // Switch turn
@@ -247,6 +304,23 @@ export class GameEngine {
       const currentIndex = rotations.indexOf(newRotation)
       const originalIndex = (currentIndex - 1 + 4) % 4
       piece.rotation = rotations[originalIndex]!
+    }
+
+    // 更新统计：增加悔棋次数和连续悔棋次数
+    if (this.gameState.currentPlayer === PlayerEnum.PLAYER1) {
+      this.gameState.player1Stats.totalUndos++
+      this.gameState.player1Stats.consecutiveUndos++
+      // 悔棋时减少移动次数
+      if (this.gameState.player1Stats.totalMoves > 0) {
+        this.gameState.player1Stats.totalMoves--
+      }
+    } else {
+      this.gameState.player2Stats.totalUndos++
+      this.gameState.player2Stats.consecutiveUndos++
+      // 悔棋时减少移动次数
+      if (this.gameState.player2Stats.totalMoves > 0) {
+        this.gameState.player2Stats.totalMoves--
+      }
     }
 
     // Switch back turn

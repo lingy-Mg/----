@@ -20,10 +20,10 @@ export function useDebugSettings() {
   
   const debugSettings = reactive<DebugSettings>({
     shapes: {
-      1: { scale: 1, offsetX: 0, offsetY: 0 },
-      2: { scale: 1, offsetX: 0, offsetY: 0 },
-      3: { scale: 1, offsetX: 0, offsetY: 0 },
-      4: { scale: 1, offsetX: 0, offsetY: 0 }
+      1: { scale: 1.67, offsetX: 5, offsetY: 5 },
+      2: { scale: 1.4, offsetX: -1, offsetY: -2 },
+      3: { scale: 1.4, offsetX: -2, offsetY: -2 },
+      4: { scale: 1.13, offsetX: 7, offsetY: 6 }
     }
   })
 
@@ -59,10 +59,10 @@ export function useDebugSettings() {
    */
   function resetAllDebugSettings() {
     debugSettings.shapes = {
-      1: { scale: 1, offsetX: 0, offsetY: 0 },
-      2: { scale: 1, offsetX: 0, offsetY: 0 },
-      3: { scale: 1, offsetX: 0, offsetY: 0 },
-      4: { scale: 1, offsetX: 0, offsetY: 0 }
+      1: { scale: 1.67, offsetX: 5, offsetY: 5 },
+      2: { scale: 1.4, offsetX: -1, offsetY: -2 },
+      3: { scale: 1.4, offsetX: -2, offsetY: -2 },
+      4: { scale: 1.13, offsetX: 7, offsetY: 6 }
     }
     saveDebugSettings()
   }
@@ -71,7 +71,13 @@ export function useDebugSettings() {
    * 重置单个棋子的设置
    */
   function resetShape(shapeId: number) {
-    debugSettings.shapes[shapeId] = { scale: 1, offsetX: 0, offsetY: 0 }
+    const defaultSettings: Record<number, { scale: number; offsetX: number; offsetY: number }> = {
+      1: { scale: 1.67, offsetX: 5, offsetY: 5 },
+      2: { scale: 1.4, offsetX: -1, offsetY: -2 },
+      3: { scale: 1.4, offsetX: -2, offsetY: -2 },
+      4: { scale: 1.13, offsetX: 7, offsetY: 6 }
+    }
+    debugSettings.shapes[shapeId] = { ...defaultSettings[shapeId] }
     saveDebugSettings()
   }
 
